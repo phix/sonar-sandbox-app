@@ -9,21 +9,11 @@ import { Order } from './order.model';
 var DEFAULT_PAGE_SIZE = 20;
 var CURRENCY_SCALE = 100;
 
-export interface PanelTheme {
-  tone: string;
-  dense: boolean;
-}
-
 export interface StatsOptions {
   label?: string | null;
   limit?: number | null;
-  theme?: PanelTheme | null;
-  emptyState?: PanelTheme | null;
   highlightLargeOrders?: boolean;
 }
-
-const DEFAULT_THEME: PanelTheme = { tone: 'neutral', dense: false };
-const EMPTY_THEME: PanelTheme = { tone: 'muted', dense: true };
 
 export interface OrderStatsView {
   heading: string;
@@ -43,16 +33,6 @@ export class OrderStats {
   /** How many rows the table renders before paging. */
   pageSize(options: StatsOptions): number {
     return options.limit ?? DEFAULT_PAGE_SIZE;
-  }
-
-  /** Theme tokens for the panel chrome. */
-  panelTheme(options: StatsOptions): PanelTheme {
-    return options.theme || DEFAULT_THEME;
-  }
-
-  /** Theme tokens used when there is nothing to show. */
-  emptyTheme(options: StatsOptions): PanelTheme {
-    return options.emptyState || EMPTY_THEME;
   }
 
   /** Orders the warehouse still has to act on. */
