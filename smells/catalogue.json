@@ -292,7 +292,7 @@
     {
       "id": "smell-021",
       "file": "web/src/app/orders/order-stats.ts",
-      "line_hint": 30,
+      "line_hint": 50,
       "module_prefix": "web",
       "sonar_rule_key": "typescript:S6606",
       "expected_severity": "MINOR",
@@ -305,7 +305,7 @@
     {
       "id": "smell-022",
       "file": "web/src/app/orders/order-stats.ts",
-      "line_hint": 35,
+      "line_hint": 55,
       "module_prefix": "web",
       "sonar_rule_key": "typescript:S6606",
       "expected_severity": "MINOR",
@@ -318,7 +318,7 @@
     {
       "id": "smell-023",
       "file": "web/src/app/orders/order-stats.ts",
-      "line_hint": 47,
+      "line_hint": 67,
       "module_prefix": "web",
       "sonar_rule_key": "typescript:S4144",
       "expected_severity": "MAJOR",
@@ -331,7 +331,7 @@
     {
       "id": "smell-024",
       "file": "web/src/app/orders/order-stats.ts",
-      "line_hint": 58,
+      "line_hint": 78,
       "module_prefix": "web",
       "sonar_rule_key": "typescript:S3358",
       "expected_severity": "MAJOR",
@@ -344,7 +344,7 @@
     {
       "id": "smell-025",
       "file": "web/src/app/orders/order-stats.ts",
-      "line_hint": 60,
+      "line_hint": 80,
       "module_prefix": "web",
       "sonar_rule_key": "typescript:S3358",
       "expected_severity": "MAJOR",
@@ -357,7 +357,7 @@
     {
       "id": "smell-026",
       "file": "web/src/app/orders/order-stats.ts",
-      "line_hint": 69,
+      "line_hint": 89,
       "module_prefix": "web",
       "sonar_rule_key": "typescript:S3358",
       "expected_severity": "MAJOR",
@@ -370,7 +370,7 @@
     {
       "id": "smell-027",
       "file": "web/src/app/orders/order-stats.ts",
-      "line_hint": 71,
+      "line_hint": 91,
       "module_prefix": "web",
       "sonar_rule_key": "typescript:S3358",
       "expected_severity": "MAJOR",
@@ -383,7 +383,7 @@
     {
       "id": "smell-028",
       "file": "web/src/app/orders/order-stats.ts",
-      "line_hint": 80,
+      "line_hint": 100,
       "module_prefix": "web",
       "sonar_rule_key": "typescript:S3776",
       "expected_severity": "CRITICAL",

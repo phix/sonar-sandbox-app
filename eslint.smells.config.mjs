@@ -59,7 +59,11 @@ export default [
     plugins: { sonarjs, '@typescript-eslint': tseslint.plugin },
     rules: {
       ...SONAR_WAY,
-      '@typescript-eslint/prefer-nullish-coalescing': 'error'
+      // Sonar's S6606 ignores primitives on purpose — '' and 0 are legitimate
+      // falsy values you might genuinely mean to replace. Matching that here
+      // keeps the local oracle from being more eager than the scan, which is
+      // exactly how the first PR scan disagreed with it.
+      '@typescript-eslint/prefer-nullish-coalescing': ['error', { ignorePrimitives: true }]
     }
   }
 ];
