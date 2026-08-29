@@ -101,7 +101,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   verify-findings:
-    name: the 29 findings are back
+    name: the planted findings are back
     needs: reset
     runs-on: ubuntu-latest
     container: node:24-bookworm
