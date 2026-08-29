@@ -1,0 +1,14 @@
+import express from 'express';
+import { createStore } from './store.js';
+import { createOrderService } from './services/order-service.js';
+import { createOrderRouter } from './routes/orders.js';
+
+export function createApp({ store = createStore() } = {}) {
+  const app = express();
+  app.use(express.json());
+
+  app.get('/health', (req, res) => res.json({ status: 'ok' }));
+  app.use('/api/orders', createOrderRouter(createOrderService(store)));
+
+  return app;
+}
