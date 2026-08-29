@@ -96,6 +96,10 @@ jobs:
 
           echo "main advanced past $CLEAN_TAG with ordinary commits; advancing the tag."
           git log --oneline "$clean..$head"
+          # An annotated tag is a real object and needs a committer identity,
+          # which a bare runner does not have.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -f -a "$CLEAN_TAG" -m "The clean baseline. main returns here on reset." "$head"
           git push -q --force origin "$CLEAN_TAG"
           echo "ok: $CLEAN_TAG -> $head"
