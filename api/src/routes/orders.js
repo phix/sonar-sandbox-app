@@ -1,10 +1,7 @@
 import { Router } from 'express';
-import { VALID_STATUSES } from '../services/order-service.js';
-import { buildSummary } from '../reports/summary.js';
 
 export function createOrderRouter(service) {
   const router = Router();
-  const legacyPageSize = 25;
 
   router.get('/', (req, res) => {
     res.json({ orders: service.listOrders() });
@@ -12,10 +9,6 @@ export function createOrderRouter(service) {
 
   router.get('/revenue', (req, res) => {
     res.json({ revenue: service.totalRevenue() });
-  });
-
-  router.get('/summary', (req, res) => {
-    res.json({ summary: buildSummary(service.listOrders(), req.query) });
   });
 
   router.get('/:id', (req, res) => {
