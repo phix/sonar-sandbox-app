@@ -66,21 +66,39 @@ jobs:
             echo "::error::branch is at $actual, expected ${{ steps.refs.outputs.dirty }}"; exit 1; }
           echo "ok: $DIRTY_BRANCH at $actual"
 
-      # main is protected and this token is not an admin, so the reset reports
-      # drift rather than trying to fix it. Anything committed to main after
-      # v0-clean was cut is invisible here and would be destroyed by a manual
-      # reset — which is exactly how sonar-project.properties nearly vanished.
-      - name: Check main has not drifted from ${{ env.CLEAN_TAG }}
+      # This workflow never force-pushes main, so main moving FORWARD with
+      # ordinary tooling commits destroys nothing — advance the tag and stay
+      # quiet. What must never pass silently is main containing the defective
+      # commits, which means PR #2 got merged: the baseline is poisoned and a
+      # reset would restore a dirty main.
+      - name: Keep ${{ env.CLEAN_TAG }} tracking main
         run: |
           git fetch -q origin main
           head="$(git rev-parse FETCH_HEAD)"
-          if [ "$head" != "${{ steps.refs.outputs.clean }}" ]; then
-            echo "::warning::main is at $head but $CLEAN_TAG is ${{ steps.refs.outputs.clean }}."
-            echo "::warning::Either move $CLEAN_TAG forward, or reset main by hand. This workflow will not force main."
-            git log --oneline "${{ steps.refs.outputs.clean }}..$head" || true
-          else
+          clean="${{ steps.refs.outputs.clean }}"
+          dirty="${{ steps.refs.outputs.dirty }}"
+
+          if [ "$head" = "$clean" ]; then
             echo "ok: main is at $CLEAN_TAG"
+            exit 0
           fi
+
+          if git merge-base --is-ancestor "$dirty" "$head"; then
+            echo "::error::main contains $DIRTY_TAG — PR #2 looks merged, so main is no longer a clean baseline."
+            echo "::error::Refusing to move $CLEAN_TAG onto a dirty main. Revert the merge on main first."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$clean" "$head"; then
+            echo "::error::main is not a descendant of $CLEAN_TAG — history was rewritten. Resolve by hand."
+            exit 1
+          fi
+
+          echo "main advanced past $CLEAN_TAG with ordinary commits; advancing the tag."
+          git log --oneline "$clean..$head"
+          git tag -f -a "$CLEAN_TAG" -m "The clean baseline. main returns here on reset." "$head"
+          git push -q --force origin "$CLEAN_TAG"
+          echo "ok: $CLEAN_TAG -> $head"
 
       # A restored tree missing the scan config fails the NEXT scan, for a
       # reason with no visible connection to this reset.
