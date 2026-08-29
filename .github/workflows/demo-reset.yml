@@ -1,0 +1,110 @@
+# Put the sandbox back to the state a demo starts from.
+#
+# Force-pushes demo/planted-smells to v0-pristine, which restores all 29
+# planted findings and re-triggers the PR scan. The PR is deliberately NOT
+# recreated: its number is what Sonar PR analysis, Jira links and the required
+# status check are all keyed to, and a reset that renumbers it breaks every one
+# of them silently.
+#
+# The reset is the one operation here that destroys work by design, so it is
+# the one that least deserves the benefit of the doubt. Everything it restores,
+# it then verifies.
+name: demo-reset
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+env:
+  DIRTY_BRANCH: demo/planted-smells
+  DIRTY_TAG: v0-pristine
+  CLEAN_TAG: v0-clean
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the tags
+        id: refs
+        run: |
+          dirty="$(git rev-parse "${DIRTY_TAG}^{commit}")"
+          clean="$(git rev-parse "${CLEAN_TAG}^{commit}")"
+          echo "dirty=$dirty" >> "$GITHUB_OUTPUT"
+          echo "clean=$clean" >> "$GITHUB_OUTPUT"
+          echo "dirty $DIRTY_TAG -> $dirty"
+          echo "clean $CLEAN_TAG -> $clean"
+
+      # If the defective branch is not a descendant of clean main, the PR diff
+      # comes out empty and the demo silently shows nothing. This already
+      # happened once during #14, so it is asserted rather than assumed.
+      - name: Assert the defective tag sits on top of clean main
+        run: |
+          if ! git merge-base --is-ancestor "${{ steps.refs.outputs.clean }}" "${{ steps.refs.outputs.dirty }}"; then
+            echo "::error::$DIRTY_TAG is not a descendant of $CLEAN_TAG — the PR diff would be empty."
+            exit 1
+          fi
+          echo "ok: $DIRTY_TAG descends from $CLEAN_TAG"
+
+      - name: Force-push the defective branch back to ${{ env.DIRTY_TAG }}
+        run: git push --force origin "${{ steps.refs.outputs.dirty }}:refs/heads/$DIRTY_BRANCH"
+
+      - name: Verify the branch landed where it should
+        run: |
+          git fetch -q origin "$DIRTY_BRANCH"
+          actual="$(git rev-parse FETCH_HEAD)"
+          [ "$actual" = "${{ steps.refs.outputs.dirty }}" ] || {
+            echo "::error::branch is at $actual, expected ${{ steps.refs.outputs.dirty }}"; exit 1; }
+          echo "ok: $DIRTY_BRANCH at $actual"
+
+      # main is protected and this token is not an admin, so the reset reports
+      # drift rather than trying to fix it. Anything committed to main after
+      # v0-clean was cut is invisible here and would be destroyed by a manual
+      # reset — which is exactly how sonar-project.properties nearly vanished.
+      - name: Check main has not drifted from ${{ env.CLEAN_TAG }}
+        run: |
+          git fetch -q origin main
+          head="$(git rev-parse FETCH_HEAD)"
+          if [ "$head" != "${{ steps.refs.outputs.clean }}" ]; then
+            echo "::warning::main is at $head but $CLEAN_TAG is ${{ steps.refs.outputs.clean }}."
+            echo "::warning::Either move $CLEAN_TAG forward, or reset main by hand. This workflow will not force main."
+            git log --oneline "${{ steps.refs.outputs.clean }}..$head" || true
+          else
+            echo "ok: main is at $CLEAN_TAG"
+          fi
+
+      # A restored tree missing the scan config fails the NEXT scan, for a
+      # reason with no visible connection to this reset.
+      - name: Assert main still carries what the pipeline needs
+        run: |
+          git fetch -q origin main
+          missing=0
+          for path in sonar-project.properties smells/catalogue.json eslint.smells.config.mjs; do
+            git cat-file -e "FETCH_HEAD:$path" 2>/dev/null && echo "ok: $path" || { echo "::error::missing on main: $path"; missing=1; }
+          done
+          exit $missing
+
+      - name: Report the PR
+        run: |
+          gh pr list --repo "$GITHUB_REPOSITORY" --head "$DIRTY_BRANCH" --state open \
+            --json number,headRefOid --jq '.[] | "PR #\(.number) open, head \(.headRefOid[0:7])"'
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  verify-findings:
+    name: the 29 findings are back
+    needs: reset
+    runs-on: ubuntu-latest
+    container: node:24-bookworm
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: demo/planted-smells
+      - run: npm ci --no-audit --no-fund
+      - run: npm run smells:verify

@@ -1,0 +1,78 @@
+# Create the defective pull request the remediation pipeline works on.
+#
+# Idempotent: if the PR is already open this reports it and stops, because the
+# PR number is what Sonar PR analysis, Jira links and the required status check
+# are keyed to. Use demo-reset to restore an existing PR's branch; use this only
+# when there is no open PR at all.
+name: demo-create-pr
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  DIRTY_BRANCH: demo/planted-smells
+  DIRTY_TAG: v0-pristine
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Stop if a PR is already open
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          num="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$DIRTY_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$num" ]; then
+            echo "::notice::PR #$num is already open. Use demo-reset to restore its branch — recreating would renumber it."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Point the branch at ${{ env.DIRTY_TAG }}
+        if: steps.existing.outputs.skip == 'false'
+        run: |
+          dirty="$(git rev-parse "${DIRTY_TAG}^{commit}")"
+          clean="$(git rev-parse 'v0-clean^{commit}')"
+          # A defective branch that is an ancestor of main produces an empty PR
+          # diff and GitHub refuses to open the PR at all. Caught here rather
+          # than as a confusing "No commits between" error.
+          if ! git merge-base --is-ancestor "$clean" "$dirty"; then
+            echo "::error::$DIRTY_TAG does not descend from v0-clean — the PR would have no diff."
+            exit 1
+          fi
+          git push --force origin "$dirty:refs/heads/$DIRTY_BRANCH"
+          echo "$DIRTY_BRANCH -> $dirty"
+
+      - name: Open the PR
+        if: steps.existing.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create --repo "$GITHUB_REPOSITORY" \
+            --base main --head "$DIRTY_BRANCH" \
+            --title "Add order reporting, stats and session auth" \
+            --body "$(cat <<'BODY'
+Adds three things the operations dashboard needs:
+
+- `api/src/reports/summary.js` — revenue, open counts, flagged orders
+- `web/src/app/orders/order-stats.ts` — the panel the dashboard renders
+- `api/src/auth/` — bearer token verification and session assembly, behind `/api/session`
+
+Build is green and all 20 existing tests pass.
+
+---
+
+<sub>**Standing demo target for the remediation pipeline.** This diff deliberately carries the 29 planted findings of the smell catalogue — 17 codemod-fixable, 10 needing judgement, and 2 in `api/src/auth/` the eligibility policy must **refuse** by path. Do not merge; `demo-reset` restores it.</sub>
+BODY
+)"
+          gh pr list --repo "$GITHUB_REPOSITORY" --head "$DIRTY_BRANCH" --state open --json number --jq '"opened PR #\(.[0].number)"'
