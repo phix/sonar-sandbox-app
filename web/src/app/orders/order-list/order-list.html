@@ -1,0 +1,21 @@
+<section class="orders">
+  <h2>Orders</h2>
+
+  @if (loading()) {
+    <p>Loading orders…</p>
+  } @else if (error()) {
+    <p class="error">{{ error() }}</p>
+  } @else {
+    <p>{{ openOrders().length }} of {{ items().length }} still open.</p>
+    <ul>
+      @for (order of items(); track order.id) {
+        <li>
+          <span class="id">{{ order.id }}</span>
+          <span class="customer">{{ order.customer }}</span>
+          <span class="total">{{ order.total | currency }}</span>
+          <span class="status">{{ order.status }}</span>
+        </li>
+      }
+    </ul>
+  }
+</section>

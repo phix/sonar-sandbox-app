@@ -1,0 +1,15 @@
+{
+  "name": "sonar-sandbox-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Intentionally defective Angular + Express app. Scan target for sonar-remediation-automation.",
+  "workspaces": ["web", "api"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "npm run build --workspace=web",
+    "test": "npm run test --workspace=api && npm run test --workspace=web",
+    "test:api": "npm run test --workspace=api",
+    "test:web": "npm run test --workspace=web",
+    "start:api": "npm run start --workspace=api"
+  }
+}
