@@ -44,13 +44,16 @@ jobs:
       # If the defective branch is not a descendant of clean main, the PR diff
       # comes out empty and the demo silently shows nothing. This already
       # happened once during #14, so it is asserted rather than assumed.
-      - name: Assert the defective tag sits on top of clean main
+      - name: Assert the defective tag still produces a diff
         run: |
-          if ! git merge-base --is-ancestor "${{ steps.refs.outputs.clean }}" "${{ steps.refs.outputs.dirty }}"; then
-            echo "::error::$DIRTY_TAG is not a descendant of $CLEAN_TAG — the PR diff would be empty."
+          # An empty PR diff happens only when the defective tip is CONTAINED in
+          # main. Having diverged from main is normal and fine — main moves on
+          # its own whenever tooling lands.
+          if git merge-base --is-ancestor "${{ steps.refs.outputs.dirty }}" "${{ steps.refs.outputs.clean }}"; then
+            echo "::error::$DIRTY_TAG is contained in $CLEAN_TAG — the PR diff would be empty."
             exit 1
           fi
-          echo "ok: $DIRTY_TAG descends from $CLEAN_TAG"
+          echo "ok: $DIRTY_TAG carries commits main does not"
 
       - name: Force-push the defective branch back to ${{ env.DIRTY_TAG }}
         run: git push --force origin "${{ steps.refs.outputs.dirty }}:refs/heads/$DIRTY_BRANCH"

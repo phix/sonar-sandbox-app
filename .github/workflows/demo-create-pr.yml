@@ -43,11 +43,11 @@ jobs:
         run: |
           dirty="$(git rev-parse "${DIRTY_TAG}^{commit}")"
           clean="$(git rev-parse 'v0-clean^{commit}')"
-          # A defective branch that is an ancestor of main produces an empty PR
-          # diff and GitHub refuses to open the PR at all. Caught here rather
-          # than as a confusing "No commits between" error.
-          if ! git merge-base --is-ancestor "$clean" "$dirty"; then
-            echo "::error::$DIRTY_TAG does not descend from v0-clean — the PR would have no diff."
+          # A defective branch CONTAINED in main produces an empty PR diff and
+          # GitHub refuses to open the PR at all. Caught here rather than as a
+          # confusing "No commits between" error. Divergence is fine.
+          if git merge-base --is-ancestor "$dirty" "$clean"; then
+            echo "::error::$DIRTY_TAG is contained in v0-clean — the PR would have no diff."
             exit 1
           fi
           git push --force origin "$dirty:refs/heads/$DIRTY_BRANCH"
