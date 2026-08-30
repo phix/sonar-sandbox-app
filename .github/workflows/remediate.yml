@@ -181,6 +181,18 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
+      # The tailnet IP, not the name `tinman`. Proven necessary by run
+      # 33341811392: the tailnet came up, and the probe died in 16ms on
+      # `curl: (6) Could not resolve host: tinman`. tailscale/github-action
+      # brings the node up with `--accept-routes` and never passes
+      # `--accept-dns`, so MagicDNS does not apply on an ephemeral runner --
+      # the name resolves from a laptop that has it and nowhere in CI. A
+      # tailnet IP is stable for the life of the node and needs no resolver.
+      #
+      # If this ever fails with a connection error rather than a DNS error,
+      # suspect tinman was removed and re-added to the tailnet and got a new
+      # 100.x address; `tailscale status` prints the current one.
+      #
       # Proves the route BEFORE the model call, so an unreachable endpoint is
       # reported as an unreachable endpoint rather than as a model failure.
       # These are two different problems with two different owners, and the
@@ -189,11 +201,11 @@ jobs:
         run: |
           if ! curl -sS -m 10 -o /dev/null -w 'GET /v1/models -> %{http_code}\n' \
                "${LLM_BASE_URL}/models"; then
-            echo "::error title=tinman unreachable::The tailnet came up but ${LLM_BASE_URL} did not answer. Check that tinman is powered on, is a node on this tailnet, that tag:ci is permitted to reach it in the ACL, and that Ollama binds beyond loopback (OLLAMA_HOST=0.0.0.0:11434 on tinman itself)."
+            echo "::error title=tinman unreachable::The tailnet came up but ${LLM_BASE_URL} did not answer. Check that tinman is powered on, that tag:ci is permitted to reach it in the ACL, that its tailnet IP has not changed, and that Ollama binds beyond loopback (OLLAMA_HOST=0.0.0.0:11434 on tinman itself)."
             exit 1
           fi
         env:
-          LLM_BASE_URL: http://tinman:11434/v1
+          LLM_BASE_URL: http://100.102.1.50:11434/v1
 
       # Only findings no codemod can handle reach this. It writes its fixes into
       # the tree, so the existing test/build/push steps below cover them without
@@ -207,7 +219,7 @@ jobs:
       # only reachable if this block is edited wrongly -- which is the point.
       - name: Agentic remediation
         env:
-          LLM_BASE_URL: http://tinman:11434/v1
+          LLM_BASE_URL: http://100.102.1.50:11434/v1
           # Pinned here rather than in `vars.`, for the same reason
           # SONAR_PROJECT_KEY and JIRA_BASE_URL above are: an unset repository
           # variable expands to the empty string in silence, and a forgotten
