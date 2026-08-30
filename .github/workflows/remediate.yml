@@ -71,6 +71,32 @@ jobs:
             core.setOutput('sha', d.head.sha);
             core.info(`PR #${d.number} head ${d.head.ref} @ ${d.head.sha}`);
 
+      # Listing a secret is not proof it works. This prints only HTTP status
+      # codes and a length — never the token — and turns an opaque "could not
+      # read Username" three steps later into a named cause.
+      - name: Prove SANDBOX_REPO_TOKEN actually authenticates
+        env:
+          T: ${{ secrets.SANDBOX_REPO_TOKEN }}
+        run: |
+          if [ -z "$T" ]; then
+            echo "::error title=SANDBOX_REPO_TOKEN is empty::The secret is not set on THIS repository. A workflow can only read secrets from the repo it runs in."
+            exit 1
+          fi
+          echo "token length: ${#T}"
+          case "$T" in
+            *[[:space:]]*) echo "::warning title=Token contains whitespace::A newline or space was almost certainly included when the value was pasted." ;;
+          esac
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $T" \
+            -H 'Accept: application/vnd.github+json' https://api.github.com/repos/${{ github.repository }})
+          echo "GET /repos/${{ github.repository }} -> $code"
+          case "$code" in
+            200) echo "token authenticates and can see this repository" ;;
+            401) echo "::error title=Token rejected (401)::The value is not a valid credential — expired, revoked, or mangled on paste."; exit 1 ;;
+            403) echo "::error title=Token forbidden (403)::Authenticates, but is not permitted here."; exit 1 ;;
+            404) echo "::error title=Token cannot see this repository (404)::A fine-grained PAT returns 404 for repositories outside its selected list. Check Repository access includes ${{ github.repository }}."; exit 1 ;;
+            *)   echo "::error title=Unexpected status $code::"; exit 1 ;;
+          esac
+
       - name: Check out the PR branch
         uses: actions/checkout@v5
         with:
