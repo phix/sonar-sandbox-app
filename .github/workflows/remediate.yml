@@ -289,6 +289,28 @@ jobs:
           git push origin HEAD:${{ steps.pr.outputs.head }}
           echo "pushed=true" >> "$GITHUB_OUTPUT"
 
+      # dispositionSummary() is the input settle/classify.mjs needs to say
+      # whether policy refusals are outstanding, and settle cannot run in this
+      # job: remediation PUSHES, the push re-triggers sonar-pr-scan, and only
+      # then does a fresh gate exist. Reading the gate here would read the one
+      # from before the fix. So the record crosses the workflow boundary as an
+      # artifact rather than being recomputed or, worse, assumed clean.
+      #
+      # Not committed to the branch instead: demo-reset.yml restores this branch
+      # to v0-pristine, and generated files committed onto it become noise in
+      # the very diff the demo exists to show.
+      - name: Upload the remediation record for the settle stage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remediation-record-pr${{ inputs.pr }}
+          path: |
+            dispositions.json
+            ratio.json
+            agentic.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Report on the pull request
         if: always()
         uses: actions/github-script@v8
