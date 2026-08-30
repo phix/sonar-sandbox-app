@@ -1,0 +1,155 @@
+# The middle of the loop: fix every eligible finding on the PR branch, write one
+# test per fix, build, test, and push back onto the branch.
+#
+# THE PUSH MUST USE SANDBOX_REPO_TOKEN, NOT GITHUB_TOKEN. A push made with
+# GITHUB_TOKEN deliberately does not trigger further workflow runs — GitHub's
+# loop guard — so the re-scan that closes this loop would never fire, and the
+# run would look exactly like a success that did nothing.
+#
+# Deviations from the ticket, both deliberate:
+#
+#   Light container, not the ubuntu:24.04 bootstrap. That shape was chosen when
+#   this job did its own re-scan and therefore needed a JRE. Under the restated
+#   flow the push re-triggers sonar-pr-scan, which brings its own scanner, so
+#   this job needs node and nothing else.
+#
+#   One commit, not one per rule group. Findings from different groups interleave
+#   within a file (summary.js carries S3504, S1854 and S6582), and every edit
+#   shifts the lines below it. Committing group by group would need the line
+#   numbers re-derived after each commit or would silently mis-target. The push
+#   is still single, which is what the PR sees; the bisect granularity is what
+#   this gives up, and the commit body lists the groups instead.
+name: remediate
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to remediate
+        required: true
+        default: '2'
+      dry_run:
+        description: Run everything but do not push
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: remediate-${{ inputs.pr }}
+  cancel-in-progress: false
+
+env:
+  SONAR_PROJECT_KEY: phix_sonar-sandbox-app
+  AUTOMATION_REPO: phix/sonar-remediation-automation
+  ATTEMPT_CAP: '2'
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    container: node:24-bookworm
+    steps:
+      - name: Resolve the pull request
+        id: pr
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              ...context.repo, pull_number: Number('${{ inputs.pr }}')
+            });
+            const d = pr.data;
+            if (d.head.repo.full_name !== d.base.repo.full_name) {
+              core.setFailed('Fork pull requests are out of scope. Repository secrets are withheld '
+                + 'from fork runs, so this cannot work, and pull_request_target is refused because it '
+                + 'would hand contributor-controlled code a write token.');
+              return;
+            }
+            if (d.state !== 'open') { core.setFailed(`PR #${d.number} is ${d.state}.`); return; }
+            core.setOutput('head', d.head.ref);
+            core.setOutput('sha', d.head.sha);
+            core.info(`PR #${d.number} head ${d.head.ref} @ ${d.head.sha}`);
+
+      - name: Check out the PR branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.pr.outputs.head }}
+          fetch-depth: 0
+          # The credential that lets the eventual push re-trigger the scan.
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - name: Enforce the attempt cap
+        run: |
+          git config --global --add safe.directory "$PWD"
+          attempts=$(git log --format='%an' -n 20 | awk '/^sonar-remediation-bot$/{n++; next} {exit} END{print n+0}')
+          echo "consecutive bot commits on this branch: $attempts (cap ${ATTEMPT_CAP})"
+          if [ "$attempts" -ge "${ATTEMPT_CAP}" ]; then
+            echo "::error title=Attempt cap reached::${attempts} consecutive automated commits already sit on this branch. Remediation is not converging; escalating instead of looping."
+            exit 1
+          fi
+
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.AUTOMATION_REPO }}
+          path: .automation
+
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix .automation
+
+      - name: Fetch the PR findings from Sonar
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: node .github/scripts/fetch-findings.mjs "$SONAR_PROJECT_KEY" "${{ inputs.pr }}" findings.json
+
+      - name: Remediate
+        id: remediate
+        run: node .automation/codemods/remediate.mjs findings.json --root . --json ratio.json
+
+      - name: Test and build — a red suite pushes nothing
+        run: |
+          npm run test:coverage
+          npm run build
+
+      - name: Commit and push
+        id: push
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if git diff --quiet && git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
+            echo "nothing to commit"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          git config user.name  'sonar-remediation-bot'
+          git config user.email 'sonar-remediation-bot@users.noreply.github.com'
+          git add -A
+          git commit -F - <<EOF
+          Remediate $(node -e "const r=require('./ratio.json');console.log(r.resolvedDeterministically)") findings deterministically
+
+          $(node -e "const r=require('./ratio.json');console.log(JSON.stringify(r,null,1))")
+
+          Generated one characterization test per applied fix. Findings refused by
+          policy are left in place deliberately and keep the merge blocked.
+          EOF
+          git push origin HEAD:${{ steps.pr.outputs.head }}
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Report on the pull request
+        if: always()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('remediation-comment.md')) {
+              core.warning('no remediation report was produced');
+              return;
+            }
+            const body = fs.readFileSync('remediation-comment.md', 'utf8');
+            const marker = '<!-- sonar-remediation -->';
+            const { owner, repo } = context.repo;
+            const issue_number = Number('${{ inputs.pr }}');
+            const all = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const mine = all.find((c) => c.body && c.body.includes(marker));
+            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
