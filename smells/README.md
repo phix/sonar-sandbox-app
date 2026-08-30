@@ -9,16 +9,16 @@ It is generated, never hand-written — see [Generating and verifying](#generati
 
 ## What is planted
 
-32 findings across 16 groups, in both modules.
+32 findings across 16 groups, in both modules. **Generated from a real SonarQube PR scan** — see [Generating and verifying](#generating-and-verifying).
 
 | Role | Findings | What it proves |
 |---|---|---|
-| `codemod_fixable` | 17 | The cheap deterministic path works end to end |
-| `claude_fallback` | 10 | The LLM path works where no mechanical fixer exists |
+| `codemod_fixable` | 19 | The cheap deterministic path works end to end |
+| `claude_fallback` | 11 | The LLM path works where no mechanical fixer exists |
 | `non_automatable` | 2 | The pipeline correctly **refuses** work and escalates |
 
 A group is `module_prefix + sonar_rule_key + expected_severity`, matching the
-plan grouping strategy in architecture spec §9. Ten of the fourteen groups hold
+plan grouping strategy in architecture spec §9. Ten of the sixteen groups hold
 more than one finding, and the largest holds four — so grouping is genuinely
 exercised rather than degenerating into fourteen groups of one.
 
