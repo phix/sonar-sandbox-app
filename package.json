@@ -16,6 +16,7 @@
     "test:api": "npm run test --workspace=api",
     "test:web": "npm run test --workspace=web",
     "start:api": "npm run start --workspace=api",
+    "test:scripts": "node --test .github/scripts/pr-gate.test.mjs",
     "smells:verify": "node smells/verify-catalogue.mjs",
     "smells:generate": "node smells/generate-catalogue.mjs",
     "test:coverage": "npm run test:coverage --workspace=api && npm run test:coverage --workspace=web"

@@ -75,7 +75,7 @@ export async function fetchAllIssues(base, projectKey, pr) {
   let page = 1;
   for (;;) {
     const url = `${base}/api/issues/search?componentKeys=${encodeURIComponent(projectKey)}`
-      + `&pullRequest=${encodeURIComponent(pr)}&types=CODE_SMELL&ps=500&p=${page}`;
+      + `&pullRequest=${encodeURIComponent(pr)}&types=CODE_SMELL&statuses=OPEN,CONFIRMED,REOPENED&ps=500&p=${page}`;
     const body = await api(url);
     issues.push(...(body.issues || []));
     const total = body.paging?.total ?? body.total ?? issues.length;

@@ -59,6 +59,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The gate's own reporting path. Deliberately not part of `npm test`:
+      # that runs on the raw PR head in remediate.yml, where this file does not
+      # exist. Here the merge ref carries main's scripts, so it is both safe and
+      # the only place the reporter is exercised before it reports.
+      - name: Test the gate's reporting path
+        run: npm run test:scripts
+
       - name: Test with coverage
         run: npm run test:coverage
 
