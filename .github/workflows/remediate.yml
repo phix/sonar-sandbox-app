@@ -32,6 +32,12 @@ on:
         description: Run everything but do not push
         type: boolean
         default: false
+      jira:
+        description: >-
+          Also file a Jira ticket per finding group. OFF by default: remediation
+          never waits for it, and the plan JSON — not Jira — is the record.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -45,6 +51,13 @@ env:
   SONAR_PROJECT_KEY: phix_sonar-sandbox-app
   AUTOMATION_REPO: phix/sonar-remediation-automation
   ATTEMPT_CAP: '2'
+  # Non-secret, and here rather than in `vars.` on purpose: an unset repository
+  # variable expands to the empty string in silence, which the Jira step would
+  # then report as "not configured" — a real credential problem and a forgotten
+  # settings page producing the identical message. SONAR_PROJECT_KEY above is
+  # pinned the same way for the same reason.
+  JIRA_BASE_URL: https://1337software.atlassian.net
+  JIRA_PROJECT_KEY: SONAR
 
 jobs:
   remediate:
@@ -139,7 +152,31 @@ jobs:
 
       - name: Remediate
         id: remediate
-        run: node .automation/codemods/remediate.mjs findings.json --root . --json ratio.json
+        run: |
+          node .automation/codemods/remediate.mjs findings.json --root . \
+            --json ratio.json --dispositions dispositions.json
+
+      # AFTER remediation, never before, and its result is read by nothing
+      # downstream. That ordering is the whole of "remediation does not wait for
+      # Jira" — and it is only affordable because the plan JSON is the record
+      # and Jira is a projection of it (spec §4.1). Had Jira been the state
+      # store this step would have to run first, and could not be optional.
+      #
+      # Off is silent and green. On-but-unconfigured exits 1, because somebody
+      # asked for tickets and did not get any, and reporting that as a skip is
+      # how a pipeline claims success for work it never did.
+      - name: File Jira tickets
+        if: ${{ inputs.jira }}
+        env:
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          SONAR_ORG: phix
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          node .automation/jira/run.mjs findings.json --enabled \
+            --plan plan.json --pr "${{ inputs.pr }}" \
+            --pr-url "${{ github.server_url }}/${{ github.repository }}/pull/${{ inputs.pr }}" \
+            --dispositions dispositions.json --json jira-run.json
 
       # `npm test`, not `test:coverage`. This job checks out the PR head branch
       # as it really is, and that branch predates every script main has gained
