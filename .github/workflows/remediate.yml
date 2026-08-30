@@ -181,6 +181,28 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
+      # tailscale/github-action reports outcome=success after exhausting ALL
+      # its retries. Run 33342014303 failed `tailscale up` five times with
+      # "backend error: invalid key: unable to validate API key" and the step
+      # still went green -- so the first thing anyone saw was a DNS error in
+      # run 1 and a connection timeout in run 2, both of which are what "there
+      # is no tailnet" looks like from one step downstream. Two wrong
+      # diagnoses came out of trusting that green.
+      #
+      # So the join is asserted here rather than believed. This is cheap and it
+      # converts a silent no-op into a named failure at the step that caused it.
+      - name: Assert the tailnet actually came up
+        run: |
+          state=$(tailscale status --json 2>/dev/null | node -e "
+            let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+              try{console.log(JSON.parse(s).BackendState||'NoState')}catch{console.log('Unreadable')}})")
+          echo "tailscale BackendState: $state"
+          if [ "$state" != "Running" ]; then
+            echo "::error title=Tailnet did not come up::tailscale up did not connect (BackendState=$state), but tailscale/github-action still reported success. Check the OAuth client: it needs the auth_keys scope AND must carry tag:ci, and tag:ci must exist in tagOwners. 'invalid key: unable to validate API key' in the join step means the credential itself was rejected, not that the ACL blocked anything."
+            exit 1
+          fi
+          tailscale status | sed -n '1,20p'
+
       # The tailnet IP, not the name `tinman`. Proven necessary by run
       # 33341811392: the tailnet came up, and the probe died in 16ms on
       # `curl: (6) Could not resolve host: tinman`. tailscale/github-action
