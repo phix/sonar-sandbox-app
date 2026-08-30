@@ -52,6 +52,21 @@ jobs:
           # Sonar needs real history for new-code attribution and blame.
           fetch-depth: 0
 
+      # Coverage has to be measured before the scan, not after: the scanner
+      # reads lcov off disk. This also means a red test suite fails the gate
+      # before Sonar is ever called — deliberate, since a PR whose tests do not
+      # pass has nothing worth scanning.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Make lcov paths repo-root relative
+        run: |
+          node .github/scripts/normalize-lcov.mjs api/coverage/lcov.info api
+          node .github/scripts/normalize-lcov.mjs web/coverage/web/lcov.info web
+
       - name: Scan the pull request
         uses: SonarSource/sonarqube-scan-action@v7
         env:

@@ -7,13 +7,15 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "vitest run",
-    "lint": "eslint src test"
+    "lint": "eslint src test",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "express": "^5.1.0"
   },
   "devDependencies": {
     "supertest": "^7.1.1",
-    "vitest": "^4.0.8"
+    "vitest": "^4.0.8",
+    "@vitest/coverage-v8": "^4.0.8"
   }
 }
