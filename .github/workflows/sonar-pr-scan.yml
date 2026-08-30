@@ -199,6 +199,41 @@ jobs:
             --pr "${{ github.event.pull_request.number }}" \
             $args --json settle.json
 
+      # The one message the whole loop exists to produce. Tri-state, and the
+      # three states are genuinely different outcomes:
+      #   off (no TEAMS_WEBHOOK_URL)  -> silent and green; nobody asked.
+      #   on but unconfigured         -> notify.mjs exits 1; somebody asked and
+      #                                  did not get it.
+      #   on and configured           -> delivered, or a red step saying why.
+      # `--enabled` is passed only when the secret exists, which is what keeps
+      # the first two apart. Collapsing them would let a missing webhook read
+      # as "notifications are turned off" forever.
+      # preflight: optional-secret TEAMS_WEBHOOK_URL
+      - name: Tell Teams
+        if: always()
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          if [ ! -f settle.json ]; then
+            echo "::warning title=No verdict to send::settle produced no settle.json, so there is nothing to notify about."
+            exit 0
+          fi
+          verdict=$(node -e "console.log(require('./settle.json').verdict.state)")
+          reason=$(node -e "console.log(require('./settle.json').verdict.reason)")
+          enabled=""
+          if [ -n "$TEAMS_WEBHOOK_URL" ]; then
+            enabled="--enabled"
+          else
+            echo "TEAMS_WEBHOOK_URL is not set on this repository; notification stays off (the default)."
+          fi
+          node .automation/teams/notify.mjs \
+            --verdict "$verdict" --reason "$reason" $enabled \
+            --repo "$GITHUB_REPOSITORY" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --pr-url "${{ github.event.pull_request.html_url }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --json teams.json
+
       - name: Post the settle verdict
         if: always()
         uses: actions/github-script@v8
