@@ -1,0 +1,105 @@
+# Scan every pull request, and let the Sonar quality gate decide whether it can
+# merge.
+#
+# This is the first and last arrow of the restated flow: it starts the loop, and
+# the re-scan triggered by a remediation push is what closes it.
+#
+# THE JOB'S OWN CONCLUSION IS THE REQUIRED STATUS CHECK. Nothing here posts a
+# separate commit status, because a second status is a second thing that can
+# disagree with the first. Make `sonar-pr-scan / gate` required on main.
+#
+# Fork pull requests are refused, not silently skipped. GitHub withholds
+# repository secrets from a `pull_request` run on a fork, so SONAR_TOKEN is
+# simply absent and the scan cannot run at all — the failure is at step 1, not
+# at the push. `pull_request_target` is deliberately NOT used to work around
+# this: it runs in the base repo's context with secrets and a write token
+# against contributor-controlled code.
+name: sonar-pr-scan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# A remediation push re-triggers this workflow while the previous run may still
+# be polling. Superseding is correct here: only the newest head matters.
+concurrency:
+  group: sonar-pr-scan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: gate
+    runs-on: ubuntu-latest
+    # The light container shape from docs/decisions/ci-container.md. The scan
+    # needs no JRE of its own: sonarqube-scan-action downloads a Scanner CLI
+    # that carries an embedded Java 21.
+    container: node:24-bookworm
+
+    steps:
+      # FIRST, before any checkout or secret use. A fork PR must end red.
+      - name: Refuse fork pull requests
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error title=Fork pull requests are out of scope::GitHub does not pass repository secrets to a pull_request run from a fork, so SONAR_TOKEN is absent and the scan cannot run. This check fails deliberately rather than reporting a green gate it never earned."
+          exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          # Sonar needs real history for new-code attribution and blame.
+          fetch-depth: 0
+
+      - name: Scan the pull request
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: >
+            -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
+            -Dsonar.pullrequest.branch=${{ github.event.pull_request.head.ref }}
+            -Dsonar.pullrequest.base=${{ github.event.pull_request.base.ref }}
+
+      # continue-on-error so a red gate still gets its comment posted below.
+      # The verdict is re-asserted in the final step.
+      - name: Wait for the gate and render the findings
+        id: gate
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: node .github/scripts/pr-gate.mjs .scannerwork/report-task.txt "${{ github.event.pull_request.number }}"
+
+      - name: Comment on the pull request
+        if: always() && steps.gate.outcome != 'skipped'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('pr-comment.md')) {
+              core.warning('no pr-comment.md — the gate step failed before rendering one');
+              return;
+            }
+            const body = fs.readFileSync('pr-comment.md', 'utf8');
+            const marker = '<!-- sonar-pr-gate -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const existing = await github.paginate(
+              github.rest.issues.listComments, { owner, repo, issue_number }
+            );
+            // Rewrite in place. One scan, one comment — a fresh comment per
+            // push would bury the PR under a scan log.
+            const mine = existing.find((c) => c.body && c.body.includes(marker));
+            if (mine) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Enforce the verdict
+        if: steps.gate.outcome == 'failure'
+        run: |
+          echo "::error::The Sonar quality gate did not pass. This pull request stays blocked."
+          exit 1

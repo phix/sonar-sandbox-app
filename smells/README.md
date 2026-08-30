@@ -9,7 +9,7 @@ It is generated, never hand-written — see [Generating and verifying](#generati
 
 ## What is planted
 
-29 findings across 14 groups, in both modules.
+32 findings across 16 groups, in both modules.
 
 | Role | Findings | What it proves |
 |---|---|---|

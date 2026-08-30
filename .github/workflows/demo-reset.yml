@@ -1,6 +1,6 @@
 # Put the sandbox back to the state a demo starts from.
 #
-# Force-pushes demo/planted-smells to v0-pristine, which restores all 29
+# Force-pushes demo/planted-smells to v0-pristine, which restores all 32
 # planted findings and re-triggers the PR scan. The PR is deliberately NOT
 # recreated: its number is what Sonar PR analysis, Jira links and the required
 # status check are all keyed to, and a reset that renumbers it breaks every one
