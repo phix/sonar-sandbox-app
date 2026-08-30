@@ -199,10 +199,12 @@ jobs:
       # the tree, so the existing test/build/push steps below cover them without
       # a second push path.
       #
-      # Unconfigured is NOT a failure here: run.mjs reports `ran: false` with a
-      # reason and exits 0, leaving those findings open and visibly unresolved.
-      # A stage that never ran and a stage that found nothing are not the same
-      # result, and this keeps them distinguishable.
+      # Unconfigured EXITS 1 and fails the job -- run.mjs:86 is deliberate about
+      # that: "a pipeline that quietly skipped its only model-backed stage would
+      # report the same green as one that ran it". It still writes
+      # agentic-comment.md first, so the PR says which findings were left open
+      # and why. Since LLM_BASE_URL and LLM_MODEL are pinned below, that path is
+      # only reachable if this block is edited wrongly -- which is the point.
       - name: Agentic remediation
         env:
           LLM_BASE_URL: http://tinman:11434/v1
@@ -263,10 +265,23 @@ jobs:
           git config user.name  'sonar-remediation-bot'
           git config user.email 'sonar-remediation-bot@users.noreply.github.com'
           git add -A
+          # Two provenances, counted separately. Sweeping model-authored edits
+          # into a commit whose subject says "deterministically" would put a
+          # false claim in the permanent history -- and provenance is exactly
+          # what someone bisecting an agentic fix needs to see first.
+          # agentic.json is absent whenever the agentic step wrote nothing.
+          agentic_n=$(node -e "try{console.log(require('./agentic.json').summary.accepted)}catch{console.log(0)}")
+          det_n=$(node -e "console.log(require('./ratio.json').resolvedDeterministically)")
+          subject="Remediate ${det_n} findings deterministically"
+          if [ "$agentic_n" -gt 0 ]; then
+            subject="Remediate ${det_n} findings deterministically, ${agentic_n} agentically"
+          fi
           git commit -F - <<EOF
-          Remediate $(node -e "const r=require('./ratio.json');console.log(r.resolvedDeterministically)") findings deterministically
+          ${subject}
 
           $(node -e "const r=require('./ratio.json');console.log(JSON.stringify(r,null,1))")
+
+          $(node -e "try{const s=require('./agentic.json').summary;console.log('Agentic: '+s.accepted+' accepted, '+s.rejected+' rejected by a gate, '+s.infraFailures+' endpoint failures, '+s.tokens+' tokens.')}catch{console.log('Agentic: did not run or produced nothing.')}")
 
           Generated one characterization test per applied fix. Findings refused by
           policy are left in place deliberately and keep the merge blocked.
@@ -280,15 +295,27 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            if (!fs.existsSync('remediation-comment.md')) {
-              core.warning('no remediation report was produced');
-              return;
-            }
-            const body = fs.readFileSync('remediation-comment.md', 'utf8');
-            const marker = '<!-- sonar-remediation -->';
             const { owner, repo } = context.repo;
             const issue_number = Number('${{ inputs.pr }}');
             const all = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
-            const mine = all.find((c) => c.body && c.body.includes(marker));
-            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
-            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+
+            // Two reports, two markers, two comments. run.mjs has always
+            // written agentic-comment.md and nothing has ever posted it, so
+            // the half of the run that needed a model was invisible on the PR.
+            // They stay separate rather than concatenated because each is
+            // upserted by its own marker: merging them would mean a run that
+            // produced only one of the two would silently blank the other.
+            const reports = [
+              { file: 'remediation-comment.md', marker: '<!-- sonar-remediation -->' },
+              { file: 'agentic-comment.md',     marker: '<!-- sonar-agentic -->' }
+            ];
+            let posted = 0;
+            for (const { file, marker } of reports) {
+              if (!fs.existsSync(file)) continue;
+              const body = fs.readFileSync(file, 'utf8');
+              const mine = all.find((c) => c.body && c.body.includes(marker));
+              if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+              else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+              posted++;
+            }
+            if (!posted) core.warning('no report of either kind was produced');
