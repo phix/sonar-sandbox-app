@@ -141,9 +141,14 @@ jobs:
         id: remediate
         run: node .automation/codemods/remediate.mjs findings.json --root . --json ratio.json
 
+      # `npm test`, not `test:coverage`. This job checks out the PR head branch
+      # as it really is, and that branch predates every script main has gained
+      # since it was cut — test:coverage is simply not there. Coverage is the
+      # scan's business anyway: sonar-pr-scan runs on the merge ref, where
+      # main's coverage config is present.
       - name: Test and build — a red suite pushes nothing
         run: |
-          npm run test:coverage
+          npm test
           npm run build
 
       - name: Commit and push
