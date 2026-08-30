@@ -135,7 +135,7 @@ jobs:
       - name: Fetch the PR findings from Sonar
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: node .github/scripts/fetch-findings.mjs "$SONAR_PROJECT_KEY" "${{ inputs.pr }}" findings.json
+        run: node .automation/codemods/fetch-findings.mjs "$SONAR_PROJECT_KEY" "${{ inputs.pr }}" findings.json
 
       - name: Remediate
         id: remediate
