@@ -62,8 +62,22 @@ env:
 jobs:
   remediate:
     runs-on: ubuntu-latest
-    container: node:24-bookworm
+    # NO `container:`. It was here only to pin node, and it is incompatible with
+    # reaching the model endpoint. Inside a container Tailscale cannot get
+    # /dev/net/tun, falls back to userspace networking, and exposes a SOCKS5
+    # proxy instead of routing transparently -- and `client.mjs` calls
+    # `globalThis.fetch`, which ignores HTTP_PROXY/ALL_PROXY entirely (undici
+    # needs an explicit ProxyAgent). The tailnet would come up, the step would
+    # go green, and the model call would still leave over normal egress and fail
+    # to resolve `tinman`. On the host runner the TUN device is real and every
+    # process routes transparently. setup-node keeps the version pin.
+    # See docs/decisions/llm-endpoint-transport.md in the automation repo.
     steps:
+      - name: Pin node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Resolve the pull request
         id: pr
         uses: actions/github-script@v8
@@ -155,6 +169,57 @@ jobs:
         run: |
           node .automation/codemods/remediate.mjs findings.json --root . \
             --json ratio.json --dispositions dispositions.json
+
+      # `tinman` is 192.168.1.217 -- a LAN address a GitHub-hosted runner has no
+      # route to. This joins the tailnet so the name resolves. Ephemeral and
+      # tagged: the node disappears when the job ends rather than accumulating
+      # dead machines in the tailnet.
+      - name: Join the tailnet
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      # Proves the route BEFORE the model call, so an unreachable endpoint is
+      # reported as an unreachable endpoint rather than as a model failure.
+      # These are two different problems with two different owners, and the
+      # agentic client cannot tell them apart from the far side of a socket.
+      - name: Prove tinman is reachable
+        run: |
+          if ! curl -sS -m 10 -o /dev/null -w 'GET /v1/models -> %{http_code}\n' \
+               "${LLM_BASE_URL}/models"; then
+            echo "::error title=tinman unreachable::The tailnet came up but ${LLM_BASE_URL} did not answer. Check that tinman is powered on, is a node on this tailnet, that tag:ci is permitted to reach it in the ACL, and that Ollama binds beyond loopback (OLLAMA_HOST=0.0.0.0:11434 on tinman itself)."
+            exit 1
+          fi
+        env:
+          LLM_BASE_URL: http://tinman:11434/v1
+
+      # Only findings no codemod can handle reach this. It writes its fixes into
+      # the tree, so the existing test/build/push steps below cover them without
+      # a second push path.
+      #
+      # Unconfigured is NOT a failure here: run.mjs reports `ran: false` with a
+      # reason and exits 0, leaving those findings open and visibly unresolved.
+      # A stage that never ran and a stage that found nothing are not the same
+      # result, and this keeps them distinguishable.
+      - name: Agentic remediation
+        env:
+          LLM_BASE_URL: http://tinman:11434/v1
+          # Pinned here rather than in `vars.`, for the same reason
+          # SONAR_PROJECT_KEY and JIRA_BASE_URL above are: an unset repository
+          # variable expands to the empty string in silence, and a forgotten
+          # settings page would then be indistinguishable from a real
+          # misconfiguration. The only model pulled on tinman.
+          LLM_MODEL: qwen2.5-coder:14b
+          # Not a credential. Ollama ignores bearer auth; this only satisfies
+          # configFromEnv's all-three-or-nothing guard.
+          LLM_API_KEY: tinman-local-unauthenticated
+          SONAR_ORG: phix
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          node .automation/codemods/agentic/run.mjs findings.json --root . \
+            --json agentic.json
 
       # AFTER remediation, never before, and its result is read by nothing
       # downstream. That ordering is the whole of "remediation does not wait for
