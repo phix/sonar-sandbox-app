@@ -87,6 +87,58 @@ export async function fetchAllIssues(base, projectKey, pr) {
 
 export const SEVERITY_ORDER = ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO'];
 
+/**
+ * Which gate conditions this pipeline actually acts on.
+ *
+ * The distinction is not cosmetic. Remediation fixes findings, so it moves the
+ * rating conditions and duplication. It does not write behaviour, so it does
+ * not move coverage: thirty generated characterization tests took
+ * `new_coverage` from 0.0 to 5.7 against a threshold of 80, and that is the
+ * ceiling of the strategy rather than a shortfall to be closed.
+ *
+ * Reporting them as one number produced the exact misreading this project
+ * exists to argue against — a gate that stayed red after 18 findings were
+ * fixed looked like remediation had done nothing, when in fact every condition
+ * it governs was already green and had been from the first run.
+ *
+ * See docs/decisions/coverage-and-the-gate.md in the automation repo. The
+ * decision recorded there is that the gate is left exactly as SonarSource
+ * ships it and the CLAIM shrinks to fit, rather than the threshold moving to
+ * meet the result.
+ */
+export const GOVERNED_METRICS = new Set([
+  'new_maintainability_rating',
+  'new_reliability_rating',
+  'new_security_rating',
+  'new_duplicated_lines_density'
+]);
+
+export function explainAxes(conditions) {
+  const failing = conditions.filter((c) => c.status !== 'OK');
+  const governed = failing.filter((c) => GOVERNED_METRICS.has(c.metricKey));
+  const ungoverned = failing.filter((c) => !GOVERNED_METRICS.has(c.metricKey));
+
+  const describe = (c) => `\`${c.metricKey}\` (${c.actualValue ?? '—'} against `
+    + `${c.comparator === 'LT' ? 'a minimum of' : 'a maximum of'} ${c.errorThreshold ?? '—'})`;
+
+  if (!failing.length) return null;
+
+  if (!governed.length) {
+    return `**Every condition automated remediation governs is green.** The gate is red on `
+      + `${ungoverned.map(describe).join(' and ')}, which this pipeline does not produce — it fixes `
+      + `findings, it does not write behaviour. Fixing every remaining finding would leave the gate `
+      + `exactly as it is.`;
+  }
+  if (!ungoverned.length) {
+    return `The gate is red on ${governed.map(describe).join(' and ')} — conditions automated `
+      + `remediation does act on, so the findings below are the thing to resolve.`;
+  }
+  return `The gate is red on two different kinds of condition. `
+    + `${governed.map(describe).join(' and ')} — remediation acts on ${governed.length === 1 ? 'this' : 'these'}. `
+    + `${ungoverned.map(describe).join(' and ')} — it does not, and fixing every finding will not move `
+    + `${ungoverned.length === 1 ? 'it' : 'them'}.`;
+}
+
 export function renderComment({ status, conditions, issues, projectKey, pr, dashboardUrl }) {
   const verdict = status === 'OK'
     ? '### ✅ Sonar quality gate: **passed**'
@@ -97,6 +149,9 @@ export function renderComment({ status, conditions, issues, projectKey, pr, dash
     verdict,
     '',
   ];
+
+  const axes = explainAxes(conditions);
+  if (axes) lines.push(axes, '');
 
   if (conditions.length) {
     lines.push('| Condition | Status | Actual | Threshold |', '|---|---|---|---|');

@@ -14,7 +14,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchAllIssues, renderComment } from './pr-gate.mjs';
+import { fetchAllIssues, renderComment, explainAxes } from './pr-gate.mjs';
 
 /** Capture every URL requested, replying with the given pages in order. */
 function stubFetch(pages) {
@@ -80,4 +80,62 @@ test('a clean pull request says so instead of rendering an empty table', () => {
 
   assert.match(body, /No code smells reported on this pull request\./);
   assert.match(body, /passed/);
+});
+
+
+/**
+ * The second misreading the reporting path produced.
+ *
+ * Counting resolved findings made a working remediation look like it had done
+ * nothing. Reporting the gate as one verdict did the same thing by a different
+ * route: every condition remediation governs has been green since the first
+ * run, and the gate has been red the whole time on new-code coverage, which
+ * remediation does not produce. Someone reading "gate: ERROR" after 18 fixes
+ * concludes the fixes failed. They did not.
+ */
+const COVERAGE_BOUND = [
+  { metricKey: 'new_reliability_rating', status: 'OK', actualValue: '1', comparator: 'GT', errorThreshold: '1' },
+  { metricKey: 'new_maintainability_rating', status: 'OK', actualValue: '1', comparator: 'GT', errorThreshold: '1' },
+  { metricKey: 'new_coverage', status: 'ERROR', actualValue: '5.7', comparator: 'LT', errorThreshold: '80' }
+];
+
+test('says plainly that fixing the findings will not turn this gate green', () => {
+  const text = explainAxes(COVERAGE_BOUND);
+  assert.match(text, /Every condition automated remediation governs is green/);
+  assert.match(text, /new_coverage/);
+  assert.match(text, /leave the gate exactly as it is/);
+  // The claim it must NOT make: that the findings below are why it is red.
+  assert.doesNotMatch(text, /the findings below are the thing to resolve/);
+});
+
+test('points at the findings when the gate is red for a reason remediation owns', () => {
+  const text = explainAxes([
+    { metricKey: 'new_maintainability_rating', status: 'ERROR', actualValue: '3', comparator: 'GT', errorThreshold: '1' }
+  ]);
+  assert.match(text, /the findings below are the thing to resolve/);
+});
+
+test('separates the two when both kinds of condition fail', () => {
+  const text = explainAxes([
+    ...COVERAGE_BOUND,
+    { metricKey: 'new_duplicated_lines_density', status: 'ERROR', actualValue: '9', comparator: 'GT', errorThreshold: '3' }
+  ]);
+  assert.match(text, /two different kinds of condition/);
+  assert.match(text, /will not move it/);
+});
+
+test('stays quiet when the gate passes', () => {
+  assert.equal(explainAxes([{ metricKey: 'new_coverage', status: 'OK' }]), null);
+});
+
+test('the explanation reaches the comment a human actually reads', () => {
+  const body = renderComment({
+    status: 'ERROR',
+    conditions: COVERAGE_BOUND,
+    issues: [{ rule: 'javascript:S1481', severity: 'MINOR', component: 'k:api/src/store.js', line: 13 }],
+    projectKey: 'k', pr: '2', dashboardUrl: 'https://example.test'
+  });
+  assert.match(body, /Every condition automated remediation governs is green/);
+  // and it comes before the table, not buried under it
+  assert.ok(body.indexOf('governs is green') < body.indexOf('| Condition |'));
 });
