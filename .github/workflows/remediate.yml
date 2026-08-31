@@ -246,15 +246,20 @@ jobs:
         # findings, and run 33344250098 was still going after 30 minutes. The
         # cap below fixes the arithmetic; this makes a future miscalculation
         # fail loudly instead of running until someone notices.
-        timeout-minutes: 20
+        #
+        # 30, from the measurement rather than a guess: 343s per successful
+        # call x 2 findings, with headroom for one retry, is ~23 minutes.
+        timeout-minutes: 30
         env:
           LLM_BASE_URL: http://100.102.1.50:11434/v1
           # Pinned here rather than in `vars.`, for the same reason
           # SONAR_PROJECT_KEY and JIRA_BASE_URL above are: an unset repository
           # variable expands to the empty string in silence, and a forgotten
           # settings page would then be indistinguishable from a real
-          # misconfiguration. The only model pulled on tinman.
-          LLM_MODEL: qwen2.5-coder:14b
+          # misconfiguration. 7b, not 14b: tinman generates ~5 tok/s and one
+          # fix is ~1750 output tokens -- 7b takes 343s, 14b did not finish in
+          # ten minutes.
+          LLM_MODEL: qwen2.5-coder:7b
           # Not a credential. Ollama ignores bearer auth; this only satisfies
           # configFromEnv's all-three-or-nothing guard.
           LLM_API_KEY: tinman-local-unauthenticated
