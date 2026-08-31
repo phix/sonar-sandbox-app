@@ -25,9 +25,13 @@ on:
   workflow_dispatch:
     inputs:
       pr:
-        description: Pull request number to remediate
-        required: true
-        default: '2'
+        description: >-
+          Pull request number to remediate. Leave blank to use the open demo
+          PR on demo/planted-smells — the number changes every time the demo
+          PR is closed and recreated, and a stale hardcoded default already
+          burned one run ("PR #2 is closed", run 33446290559).
+        required: false
+        default: ''
       dry_run:
         description: Run everything but do not push
         type: boolean
@@ -44,7 +48,9 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: remediate-${{ inputs.pr }}
+  # A blank pr input collapses to one shared group — correct, since blank
+  # always means the single open demo PR. Explicit numbers keep their own.
+  group: remediate-${{ inputs.pr || 'demo' }}
   cancel-in-progress: false
 
 env:
@@ -83,8 +89,23 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            let number = Number('${{ inputs.pr }}' || 0);
+            if (!number) {
+              // Blank input: find the open demo PR by its head branch. There
+              // is at most one — demo-create-pr refuses to open a second.
+              const open = await github.rest.pulls.list({
+                ...context.repo, state: 'open', head: `${context.repo.owner}:demo/planted-smells`
+              });
+              if (open.data.length !== 1) {
+                core.setFailed(`Expected exactly one open PR on demo/planted-smells, found ${open.data.length}. `
+                  + 'Run "01 - create the demo PR" first, or pass an explicit PR number.');
+                return;
+              }
+              number = open.data[0].number;
+              core.info(`no PR number given — resolved the open demo PR: #${number}`);
+            }
             const pr = await github.rest.pulls.get({
-              ...context.repo, pull_number: Number('${{ inputs.pr }}')
+              ...context.repo, pull_number: number
             });
             const d = pr.data;
             if (d.head.repo.full_name !== d.base.repo.full_name) {
@@ -94,6 +115,7 @@ jobs:
               return;
             }
             if (d.state !== 'open') { core.setFailed(`PR #${d.number} is ${d.state}.`); return; }
+            core.setOutput('number', d.number);
             core.setOutput('head', d.head.ref);
             core.setOutput('sha', d.head.sha);
             core.info(`PR #${d.number} head ${d.head.ref} @ ${d.head.sha}`);
@@ -162,7 +184,7 @@ jobs:
       - name: Fetch the PR findings from Sonar
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: node .automation/codemods/fetch-findings.mjs "$SONAR_PROJECT_KEY" "${{ inputs.pr }}" findings.json
+        run: node .automation/codemods/fetch-findings.mjs "$SONAR_PROJECT_KEY" "${{ steps.pr.outputs.number }}" findings.json
 
       - name: Remediate
         id: remediate
@@ -320,8 +342,8 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           node .automation/jira/run.mjs findings.json --enabled \
-            --plan plan.json --pr "${{ inputs.pr }}" \
-            --pr-url "${{ github.server_url }}/${{ github.repository }}/pull/${{ inputs.pr }}" \
+            --plan plan.json --pr "${{ steps.pr.outputs.number }}" \
+            --pr-url "${{ github.server_url }}/${{ github.repository }}/pull/${{ steps.pr.outputs.number }}" \
             --dispositions dispositions.json --json jira-run.json
 
       # `npm test`, not `test:coverage`. This job checks out the PR head branch
@@ -382,7 +404,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: remediation-record-pr${{ inputs.pr }}
+          name: remediation-record-pr${{ steps.pr.outputs.number }}
           path: |
             dispositions.json
             ratio.json
@@ -397,7 +419,7 @@ jobs:
           script: |
             const fs = require('fs');
             const { owner, repo } = context.repo;
-            const issue_number = Number('${{ inputs.pr }}');
+            const issue_number = Number('${{ steps.pr.outputs.number }}');
             const all = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
 
             // Two reports, two markers, two comments. run.mjs has always
