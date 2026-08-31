@@ -27,9 +27,17 @@ jobs:
   reset:
     runs-on: ubuntu-latest
     steps:
+      # SANDBOX_REPO_TOKEN, not GITHUB_TOKEN, for the same reason remediate.yml
+      # shouts it: the whole point of this force-push is the PR scan it
+      # re-triggers, and a push made with GITHUB_TOKEN does not properly fire
+      # downstream workflows. Proven by this workflow's own first live run
+      # (33419774290, 2026-08-31): the scan run was created but sat at
+      # `action_required` with zero jobs until a human approved it — a reset
+      # that needs a click defeats a reset.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
 
       - name: Resolve the tags
         id: refs
