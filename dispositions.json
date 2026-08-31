@@ -1,0 +1,208 @@
+{
+ "refused": [
+  {
+   "rule": "javascript:S7737",
+   "file": "api/src/auth/session.js",
+   "line": 32,
+   "policyReason": "`api/src/auth/session.js` is under the protected path `api/src/auth/`. Security-sensitive code is refused by location, not by whether the fix looks easy."
+  },
+  {
+   "rule": "javascript:S2004",
+   "file": "api/src/auth/session.js",
+   "line": 45,
+   "policyReason": "`api/src/auth/session.js` is under the protected path `api/src/auth/`. Security-sensitive code is refused by location, not by whether the fix looks easy."
+  },
+  {
+   "rule": "javascript:S7765",
+   "file": "api/src/auth/session.js",
+   "line": 47,
+   "policyReason": "`api/src/auth/session.js` is under the protected path `api/src/auth/`. Security-sensitive code is refused by location, not by whether the fix looks easy."
+  },
+  {
+   "rule": "javascript:S1121",
+   "file": "api/src/auth/token-verifier.js",
+   "line": 33,
+   "policyReason": "`api/src/auth/token-verifier.js` is under the protected path `api/src/auth/`. Security-sensitive code is refused by location, not by whether the fix looks easy."
+  }
+ ],
+ "needsAgent": [
+  {
+   "rule": "javascript:S4144",
+   "file": "api/src/reports/summary.js",
+   "line": 20
+  },
+  {
+   "rule": "javascript:S4144",
+   "file": "api/src/reports/summary.js",
+   "line": 39
+  },
+  {
+   "rule": "javascript:S3776",
+   "file": "api/src/reports/summary.js",
+   "line": 65
+  },
+  {
+   "rule": "javascript:S3776",
+   "file": "api/src/services/order-service.js",
+   "line": 23
+  },
+  {
+   "rule": "typescript:S4144",
+   "file": "web/src/app/orders/order-stats.ts",
+   "line": 47
+  },
+  {
+   "rule": "typescript:S3358",
+   "file": "web/src/app/orders/order-stats.ts",
+   "line": 58
+  },
+  {
+   "rule": "typescript:S3358",
+   "file": "web/src/app/orders/order-stats.ts",
+   "line": 60
+  },
+  {
+   "rule": "typescript:S3358",
+   "file": "web/src/app/orders/order-stats.ts",
+   "line": 69
+  },
+  {
+   "rule": "typescript:S3358",
+   "file": "web/src/app/orders/order-stats.ts",
+   "line": 71
+  },
+  {
+   "rule": "typescript:S3776",
+   "file": "web/src/app/orders/order-stats.ts",
+   "line": 80
+  }
+ ],
+ "results": [
+  {
+   "rule": "javascript:S1128",
+   "file": "api/src/app.js",
+   "line": 2,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S6582",
+   "file": "api/src/reports/summary.js",
+   "line": 97,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S6582",
+   "file": "api/src/reports/summary.js",
+   "line": 87,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S6582",
+   "file": "api/src/reports/summary.js",
+   "line": 78,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S1854",
+   "file": "api/src/reports/summary.js",
+   "line": 51,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S3504",
+   "file": "api/src/reports/summary.js",
+   "line": 9,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S3504",
+   "file": "api/src/reports/summary.js",
+   "line": 8,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S1481",
+   "file": "api/src/routes/orders.js",
+   "line": 7,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S1854",
+   "file": "api/src/routes/orders.js",
+   "line": 7,
+   "changed": false,
+   "alreadyGone": true
+  },
+  {
+   "rule": "javascript:S1128",
+   "file": "api/src/routes/orders.js",
+   "line": 2,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S1481",
+   "file": "api/src/services/order-service.js",
+   "line": 8,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S1854",
+   "file": "api/src/services/order-service.js",
+   "line": 8,
+   "changed": false,
+   "alreadyGone": true
+  },
+  {
+   "rule": "javascript:S1481",
+   "file": "api/src/store.js",
+   "line": 13,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "javascript:S1854",
+   "file": "api/src/store.js",
+   "line": 13,
+   "changed": false,
+   "alreadyGone": true
+  },
+  {
+   "rule": "typescript:S1128",
+   "file": "web/src/app/orders/order-list/order-list.ts",
+   "line": 3,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "typescript:S3504",
+   "file": "web/src/app/orders/order-stats.ts",
+   "line": 10,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "typescript:S3504",
+   "file": "web/src/app/orders/order-stats.ts",
+   "line": 9,
+   "changed": true,
+   "alreadyGone": false
+  },
+  {
+   "rule": "typescript:S1128",
+   "file": "web/src/app/orders/order.service.ts",
+   "line": 3,
+   "changed": true,
+   "alreadyGone": false
+  }
+ ]
+}

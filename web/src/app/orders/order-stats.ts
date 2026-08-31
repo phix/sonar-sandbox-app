@@ -6,8 +6,8 @@ import { Order } from './order.model';
  * caller, and the shapes below have rhymed with each other ever since.
  */
 
-var DEFAULT_PAGE_SIZE = 20;
-var CURRENCY_SCALE = 100;
+const DEFAULT_PAGE_SIZE = 20;
+const CURRENCY_SCALE = 100;
 
 export interface StatsOptions {
   label?: string | null;

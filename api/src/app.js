@@ -1,5 +1,4 @@
 import express from 'express';
-import { randomUUID } from 'node:crypto';
 import { createStore } from './store.js';
 import { createOrderService } from './services/order-service.js';
 import { createOrderRouter } from './routes/orders.js';

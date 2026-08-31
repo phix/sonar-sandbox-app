@@ -5,8 +5,8 @@ import { VALID_STATUSES } from '../services/order-service.js';
  * which is why the shapes below rhyme with each other.
  */
 
-var CURRENCY_SCALE = 100;
-var DEFAULT_WINDOW_DAYS = 30;
+const CURRENCY_SCALE = 100;
+const DEFAULT_WINDOW_DAYS = 30;
 
 /** Orders the warehouse still has to act on. */
 export function countOpen(orders) {
@@ -18,7 +18,7 @@ export function countOpen(orders) {
 
 /** Orders shown in the "needs attention" panel. */
 export function countPending(orders) {
-  const live = orders.filter((order) => order.status === 'PLACED' || order.status === 'SHIPPED');
+  const live = orders.filter((order) => order.status === 'PENDING' || order.status === 'PROCESSING');
   const ids = live.map((order) => order.id);
   const unique = new Set(ids);
   return unique.size;
@@ -48,7 +48,7 @@ export function peakOrderValue(orders) {
 
 /** Mean order value across the set. */
 export function averageTotal(orders) {
-  let total = orders.map((order) => order.total).reduce((sum, value) => sum + value, 0);
+  let total;
   total = orders.reduce((sum, order) => sum + toCents(order.total), 0) / CURRENCY_SCALE;
   return orders.length ? total / orders.length : 0;
 }
@@ -75,7 +75,7 @@ export function buildSummary(orders, options) {
     return summary;
   }
 
-  if (options && options.windowDays) {
+  if (options?.windowDays) {
     if (options.windowDays > 0 && options.windowDays < 365) {
       summary.windowDays = options.windowDays;
     } else {
@@ -84,7 +84,7 @@ export function buildSummary(orders, options) {
   }
 
   for (const order of orders) {
-    if (!order || !order.id) {
+    if (!order?.id) {
       continue;
     }
 
@@ -94,7 +94,7 @@ export function buildSummary(orders, options) {
     }
 
     if (order.status === 'CANCELLED') {
-      if (options && options.includeCancelled) {
+      if (options?.includeCancelled) {
         summary.byStatus.CANCELLED = (summary.byStatus.CANCELLED || 0) + 1;
       }
       continue;

@@ -1,0 +1,8 @@
+{
+  "total": 32,
+  "refusedByPolicy": 4,
+  "resolvedDeterministically": 18,
+  "awaitingAgent": 10,
+  "refusedByFixer": 0,
+  "failed": 0
+}
