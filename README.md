@@ -15,7 +15,7 @@ SonarQube Cloud scan
     → recon    normalize findings, fingerprint them
     → plan     group them, create Jira issues
     → execute  branch, fix, build, test, re-scan
-    → verify   PR opened, Jira transitioned, Teams notified
+    → verify   PR opened, Jira transitioned, Telegram notified
     → reset    one click back to the pristine defective baseline
 ```
 
