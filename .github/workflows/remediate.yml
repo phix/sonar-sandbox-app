@@ -259,27 +259,27 @@ jobs:
           # settings page would then be indistinguishable from a real
           # misconfiguration.
           #
-          # sonarfix:latest is a derived tag on tinman: qwen2.5-coder **7b**
-          # with num_ctx 8192 and num_predict 2560 baked in. The sizing story,
-          # all measured 2026-08-31 with the same 200-token / 5k-prompt probes:
+          # sonarfix:latest is a ROLE tag on tinman, and this line is a
+          # contract, not a model choice: the tag always names whatever model,
+          # quant, context window and output cap currently survive tinman's
+          # ~8GB of genuinely usable VRAM AND the acceptance gates. Model
+          # quirks live in the tag too (the resident qwen3:8b has its
+          # thinking mode forced off by a patched template, because /v1 sends
+          # reasoning to a field this pipeline never reads and an empty
+          # `content` comes back otherwise). Re-baking the tag is an
+          # ollama-side edit and deliberately NOT a workflow PR.
           #
-          #   q4 14b:  ~10GB, spills   ->   2.9 tok/s (8-min attempts, run 33420164274)
-          #   q3 14b:  8.8GB, "fits" per ollama -- but only shallowly: short
-          #            prompts ran 50 tok/s, while a 5k-token prompt hit 69s
-          #            prefill and 3.2 tok/s, because the deep end of the KV
-          #            cache sat in spilled memory. Run 33432556554's attempts
-          #            still took 7-10min and the step timed out at 45.
-          #   7b:      5.1GB resident at ctx 8192 -- truly fits, with ~3GB
-          #            headroom: 10s prefill on the same 5k prompt, 91 tok/s
-          #            at depth.
-          #
-          # The old "7b accepted 0 of 2" verdict (run 33404515049) predates the
-          # ctx fix: those informed retries were silently truncated at Ollama's
-          # 4096 default, the same defect that made the 14b look boundary-
-          # limited on summary.js:39 until an 8k window got it ACCEPTED. The
-          # num_predict cap bounds a rambling generation to ~30s instead of a
-          # 900s infra timeout. Role-named tag: a future remodel is an
-          # ollama-side edit, not a workflow PR.
+          # As of 2026-08-31: qwen3:8b, num_ctx 8192, num_predict 2560.
+          # The elimination that got here (identical 5k-prompt probes, and
+          # dry runs 33432556554 / 33437464397 / 33440267614):
+          #   14b q4  spills at rest         2.9 tok/s   8-min attempts
+          #   14b q3  spills at depth only   3.2 tok/s   45-min step timeout
+          #   7b      fits, 91 tok/s         but wrong test expectations, 0 accepted
+          #   qwen3:8b fits, 64 tok/s        summary.js:39 ACCEPTED, step in 3m08s
+          # The full saga: docs/decisions/llm-endpoint-transport.md in the
+          # automation repo. Ollama's "100% GPU" claim is not evidence of
+          # fitting -- it counts its own allocation, not what Windows holds
+          # on the card; only a deep-context probe tells the truth.
           LLM_MODEL: sonarfix:latest
           # Not a credential. Ollama ignores bearer auth; this only satisfies
           # configFromEnv's all-three-or-nothing guard.
