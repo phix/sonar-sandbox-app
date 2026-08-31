@@ -4,7 +4,7 @@
 # PR number is what Sonar PR analysis, Jira links and the required status check
 # are keyed to. Use demo-reset to restore an existing PR's branch; use this only
 # when there is no open PR at all.
-name: demo-create-pr
+name: 01 - create the demo PR
 
 on:
   workflow_dispatch:

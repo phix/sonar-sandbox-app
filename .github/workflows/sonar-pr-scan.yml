@@ -6,7 +6,9 @@
 #
 # THE JOB'S OWN CONCLUSION IS THE REQUIRED STATUS CHECK. Nothing here posts a
 # separate commit status, because a second status is a second thing that can
-# disagree with the first. Make `sonar-pr-scan / gate` required on main.
+# disagree with the first. Make the `gate` job's check required on main (the
+# check context is the JOB name, so renaming this workflow's display name —
+# it carries a presentation number — never touches branch protection).
 #
 # Fork pull requests are refused, not silently skipped. GitHub withholds
 # repository secrets from a `pull_request` run on a fork, so SONAR_TOKEN is
@@ -14,7 +16,7 @@
 # at the push. `pull_request_target` is deliberately NOT used to work around
 # this: it runs in the base repo's context with secrets and a write token
 # against contributor-controlled code.
-name: sonar-pr-scan
+name: 02 - scan, gate & settle
 
 on:
   pull_request:

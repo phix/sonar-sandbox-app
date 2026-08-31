@@ -19,7 +19,7 @@
 #   numbers re-derived after each commit or would silently mis-target. The push
 #   is still single, which is what the PR sees; the bisect granularity is what
 #   this gives up, and the commit body lists the groups instead.
-name: remediate
+name: 03 - remediate
 
 on:
   workflow_dispatch:
