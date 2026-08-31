@@ -257,13 +257,21 @@ jobs:
           # SONAR_PROJECT_KEY and JIRA_BASE_URL above are: an unset repository
           # variable expands to the empty string in silence, and a forgotten
           # settings page would then be indistinguishable from a real
-          # misconfiguration. 14b, not 7b: the ~5 tok/s era that ruled it out
-          # was VRAM contention from both models resident at once, not the
-          # card's ceiling -- calls now finish in seconds either way. On the
-          # identical post-deterministic tree the 7b accepted 0 of 2 (it will
-          # not surrender a wrong guess about buildSummary's cents at
-          # temperature 0, run 33404515049) and the 14b accepted 1 of 2.
-          LLM_MODEL: qwen2.5-coder:14b
+          # misconfiguration.
+          #
+          # sonarfix:14b is a derived tag on tinman: qwen2.5-coder 14b at
+          # Q3_K_M with num_ctx 8192 baked in. Measured 2026-08-31: the q4
+          # 14b (9.5GB + KV) overflowed the card's ~9GB usable VRAM into
+          # system RAM -- Windows sysmem fallback, still reported "100% GPU"
+          # -- and generated at 2.9 tok/s (run 33420164274's ~8min attempts).
+          # The q3 fits (8.8GB, fraction 1.00) and holds ~50 tok/s at ctx
+          # 8192, ~18x. The 8k ctx matters on its own: calls average ~3.5k
+          # tokens and informed retries were silently truncating at the 4096
+          # default. Still 14b, not 7b: on the identical post-deterministic
+          # tree the 7b accepted 0 of 2 (run 33404515049), the 14b 1 of 2.
+          # The role-named tag means a future requant is an ollama-side edit,
+          # not a workflow PR.
+          LLM_MODEL: sonarfix:14b
           # Not a credential. Ollama ignores bearer auth; this only satisfies
           # configFromEnv's all-three-or-nothing guard.
           LLM_API_KEY: tinman-local-unauthenticated
