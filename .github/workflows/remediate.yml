@@ -247,9 +247,10 @@ jobs:
         # cap below fixes the arithmetic; this makes a future miscalculation
         # fail loudly instead of running until someone notices.
         #
-        # 30, from the measurement rather than a guess: 343s per successful
-        # call x 2 findings, with headroom for one retry, is ~23 minutes.
-        timeout-minutes: 30
+        # 45, from the measurement rather than a guess: CI calls run ~5.5min
+        # each (run 33402238999), and 2 findings x 3 attempts is ~33 minutes
+        # worst case, plus setup.
+        timeout-minutes: 45
         env:
           LLM_BASE_URL: http://100.102.1.50:11434/v1
           # Pinned here rather than in `vars.`, for the same reason
@@ -271,8 +272,11 @@ jobs:
           # each -- so ten of them is a coffee break and two still shows the
           # entire mechanism. Deferred findings are named in the PR report, so
           # a capped run never reads like an exhaustive one.
+          # Three attempts, not two: at temperature 0 attempt 1 is identical
+          # every run, so convergence lives entirely in the informed retries —
+          # and run 33402238999 showed the second attempt visibly narrowing.
           node .automation/codemods/agentic/run.mjs findings.json --root . \
-            --max-findings 2 --json agentic.json
+            --max-findings 2 --max-attempts 3 --json agentic.json
 
       # AFTER remediation, never before, and its result is read by nothing
       # downstream. That ordering is the whole of "remediation does not wait for
