@@ -125,3 +125,130 @@ jobs:
         run: |
           echo "::error::The Sonar quality gate did not pass. This pull request stays blocked."
           exit 1
+
+  # Deliberately a SECOND job, and deliberately not called `gate`.
+  #
+  # `gate` is the required status context in branch protection. Anything added
+  # to it can block a merge, and settle must never be able to: it reports a
+  # terminal state and optionally flags auto-merge intent, and a bug in it
+  # blocking an otherwise-green PR would be a worse failure than not running.
+  # `needs: gate` with `if: always()` means it observes the gate rather than
+  # participating in it -- it runs on a red gate too, which is the case whose
+  # message the whole settle stage exists to produce.
+  #
+  # This is also why settle is not a step in remediate.yml: remediation pushes,
+  # the push re-triggers THIS workflow, and only here is the gate the fixed
+  # code's gate rather than the one from before the fix.
+  settle:
+    name: settle
+    needs: gate
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: phix/sonar-remediation-automation
+          path: .automation
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install
+        run: npm ci --prefix .automation
+
+      # Absent is a legitimate state: no remediation has run on this branch yet.
+      # settle then reports red-undetermined naming the missing input, which is
+      # the honest answer -- not a green that ignored policy refusals.
+      - name: Fetch the remediation record, if remediation has run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Looked up by ARTIFACT NAME, not by branch. remediate.yml is
+          # workflow_dispatch, so its run is attributed to whatever ref it was
+          # dispatched from -- usually main, never the PR head -- and a
+          # --branch filter would quietly find nothing and report "no
+          # remediation has run" for a PR that had just been remediated. The
+          # artifact name carries the PR number, which is the actual
+          # discriminator.
+          name="remediation-record-pr${{ github.event.pull_request.number }}"
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name&per_page=5" \
+            --jq '[.artifacts[] | select(.expired == false)][0].workflow_run.id // empty')
+          if [ -z "$run_id" ]; then
+            echo "no unexpired $name artifact; settle will report the dispositions as undetermined"
+            exit 0
+          fi
+          echo "downloading $name from remediate run $run_id"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$name" --dir . || \
+            echo "::warning title=Record could not be downloaded::run $run_id listed $name but it did not download."
+
+      - name: Settle
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORG: phix
+        run: |
+          args=""
+          [ -f dispositions.json ] && args="--dispositions dispositions.json"
+          # Auto-merge is NOT passed. Off is the default and the only safe one
+          # here: this workflow runs on every push with no way for a human to
+          # opt in, and "nobody asked" must stay distinguishable from "asked
+          # and did not get it".
+          node .automation/settle/run.mjs \
+            --project phix_sonar-sandbox-app \
+            --pr "${{ github.event.pull_request.number }}" \
+            $args --json settle.json
+
+      # The one message the whole loop exists to produce. Tri-state, and the
+      # three states are genuinely different outcomes:
+      #   off (no TEAMS_WEBHOOK_URL)  -> silent and green; nobody asked.
+      #   on but unconfigured         -> notify.mjs exits 1; somebody asked and
+      #                                  did not get it.
+      #   on and configured           -> delivered, or a red step saying why.
+      # `--enabled` is passed only when the secret exists, which is what keeps
+      # the first two apart. Collapsing them would let a missing webhook read
+      # as "notifications are turned off" forever.
+      # preflight: optional-secret TEAMS_WEBHOOK_URL
+      - name: Tell Teams
+        if: always()
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          if [ ! -f settle.json ]; then
+            echo "::warning title=No verdict to send::settle produced no settle.json, so there is nothing to notify about."
+            exit 0
+          fi
+          verdict=$(node -e "console.log(require('./settle.json').verdict.state)")
+          reason=$(node -e "console.log(require('./settle.json').verdict.reason)")
+          enabled=""
+          if [ -n "$TEAMS_WEBHOOK_URL" ]; then
+            enabled="--enabled"
+          else
+            echo "TEAMS_WEBHOOK_URL is not set on this repository; notification stays off (the default)."
+          fi
+          node .automation/teams/notify.mjs \
+            --verdict "$verdict" --reason "$reason" $enabled \
+            --repo "$GITHUB_REPOSITORY" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --pr-url "${{ github.event.pull_request.html_url }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --json teams.json
+
+      - name: Post the settle verdict
+        if: always()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('settle-comment.md')) {
+              core.warning('settle produced no report');
+              return;
+            }
+            const body = fs.readFileSync('settle-comment.md', 'utf8');
+            const marker = '<!-- sonar-settle -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const all = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const mine = all.find((c) => c.body && c.body.includes(marker));
+            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
