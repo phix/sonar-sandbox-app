@@ -259,19 +259,28 @@ jobs:
           # settings page would then be indistinguishable from a real
           # misconfiguration.
           #
-          # sonarfix:14b is a derived tag on tinman: qwen2.5-coder 14b at
-          # Q3_K_M with num_ctx 8192 baked in. Measured 2026-08-31: the q4
-          # 14b (9.5GB + KV) overflowed the card's ~9GB usable VRAM into
-          # system RAM -- Windows sysmem fallback, still reported "100% GPU"
-          # -- and generated at 2.9 tok/s (run 33420164274's ~8min attempts).
-          # The q3 fits (8.8GB, fraction 1.00) and holds ~50 tok/s at ctx
-          # 8192, ~18x. The 8k ctx matters on its own: calls average ~3.5k
-          # tokens and informed retries were silently truncating at the 4096
-          # default. Still 14b, not 7b: on the identical post-deterministic
-          # tree the 7b accepted 0 of 2 (run 33404515049), the 14b 1 of 2.
-          # The role-named tag means a future requant is an ollama-side edit,
-          # not a workflow PR.
-          LLM_MODEL: sonarfix:14b
+          # sonarfix:latest is a derived tag on tinman: qwen2.5-coder **7b**
+          # with num_ctx 8192 and num_predict 2560 baked in. The sizing story,
+          # all measured 2026-08-31 with the same 200-token / 5k-prompt probes:
+          #
+          #   q4 14b:  ~10GB, spills   ->   2.9 tok/s (8-min attempts, run 33420164274)
+          #   q3 14b:  8.8GB, "fits" per ollama -- but only shallowly: short
+          #            prompts ran 50 tok/s, while a 5k-token prompt hit 69s
+          #            prefill and 3.2 tok/s, because the deep end of the KV
+          #            cache sat in spilled memory. Run 33432556554's attempts
+          #            still took 7-10min and the step timed out at 45.
+          #   7b:      5.1GB resident at ctx 8192 -- truly fits, with ~3GB
+          #            headroom: 10s prefill on the same 5k prompt, 91 tok/s
+          #            at depth.
+          #
+          # The old "7b accepted 0 of 2" verdict (run 33404515049) predates the
+          # ctx fix: those informed retries were silently truncated at Ollama's
+          # 4096 default, the same defect that made the 14b look boundary-
+          # limited on summary.js:39 until an 8k window got it ACCEPTED. The
+          # num_predict cap bounds a rambling generation to ~30s instead of a
+          # 900s infra timeout. Role-named tag: a future remodel is an
+          # ollama-side edit, not a workflow PR.
+          LLM_MODEL: sonarfix:latest
           # Not a credential. Ollama ignores bearer auth; this only satisfies
           # configFromEnv's all-three-or-nothing guard.
           LLM_API_KEY: tinman-local-unauthenticated
@@ -283,11 +292,15 @@ jobs:
           # each -- so ten of them is a coffee break and two still shows the
           # entire mechanism. Deferred findings are named in the PR report, so
           # a capped run never reads like an exhaustive one.
-          # Three attempts, not two: at temperature 0 attempt 1 is identical
-          # every run, so convergence lives entirely in the informed retries —
-          # and run 33402238999 showed the second attempt visibly narrowing.
+          # Two attempts, not three. The one informed retry is still where
+          # convergence lives (temperature 0 makes attempt 1 identical every
+          # run, and summary.js:39 was ACCEPTED on attempt 2 in runs
+          # 33428191561 and 33432556554 once the 8k context stopped truncating
+          # the retry). But attempt 3 has never once earned its cost: every
+          # observed acceptance came on attempt 1 or 2, and every third
+          # attempt reproduced the second's rejection verbatim.
           node .automation/codemods/agentic/run.mjs findings.json --root . \
-            --max-findings 2 --max-attempts 3 --json agentic.json
+            --max-findings 2 --max-attempts 2 --json agentic.json
 
       # AFTER remediation, never before, and its result is read by nothing
       # downstream. That ordering is the whole of "remediation does not wait for
