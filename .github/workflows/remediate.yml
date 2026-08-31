@@ -257,10 +257,13 @@ jobs:
           # SONAR_PROJECT_KEY and JIRA_BASE_URL above are: an unset repository
           # variable expands to the empty string in silence, and a forgotten
           # settings page would then be indistinguishable from a real
-          # misconfiguration. 7b, not 14b: tinman generates ~5 tok/s and one
-          # fix is ~1750 output tokens -- 7b takes 343s, 14b did not finish in
-          # ten minutes.
-          LLM_MODEL: qwen2.5-coder:7b
+          # misconfiguration. 14b, not 7b: the ~5 tok/s era that ruled it out
+          # was VRAM contention from both models resident at once, not the
+          # card's ceiling -- calls now finish in seconds either way. On the
+          # identical post-deterministic tree the 7b accepted 0 of 2 (it will
+          # not surrender a wrong guess about buildSummary's cents at
+          # temperature 0, run 33404515049) and the 14b accepted 1 of 2.
+          LLM_MODEL: qwen2.5-coder:14b
           # Not a credential. Ollama ignores bearer auth; this only satisfies
           # configFromEnv's all-three-or-nothing guard.
           LLM_API_KEY: tinman-local-unauthenticated
