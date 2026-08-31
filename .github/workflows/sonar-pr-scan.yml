@@ -201,18 +201,25 @@ jobs:
 
       # The one message the whole loop exists to produce. Tri-state, and the
       # three states are genuinely different outcomes:
-      #   off (no TEAMS_WEBHOOK_URL)  -> silent and green; nobody asked.
-      #   on but unconfigured         -> notify.mjs exits 1; somebody asked and
-      #                                  did not get it.
-      #   on and configured           -> delivered, or a red step saying why.
-      # `--enabled` is passed only when the secret exists, which is what keeps
-      # the first two apart. Collapsing them would let a missing webhook read
-      # as "notifications are turned off" forever.
-      # preflight: optional-secret TEAMS_WEBHOOK_URL
-      - name: Tell Teams
+      #   off (no TELEGRAM_BOT_TOKEN)  -> silent and green; nobody asked.
+      #   on but unconfigured          -> notify.mjs exits 1; somebody asked and
+      #                                   did not get it.
+      #   on and configured            -> delivered, or a red step saying why.
+      # `--enabled` is passed only when the token exists, which is what keeps
+      # the first two apart. Collapsing them would let a missing credential
+      # read as "notifications are turned off" forever. The chat id is
+      # deliberately NOT part of the gate: token-without-chat-id means
+      # somebody configured half of it, and that must surface as notify.mjs's
+      # red ("TELEGRAM_CHAT_ID unset"), never as off.
+      # (Teams was descoped 2026-08-31 — see notify-telegram-not-teams.md in
+      # the automation repo's docs/decisions.)
+      # preflight: optional-secret TELEGRAM_BOT_TOKEN
+      # preflight: optional-secret TELEGRAM_CHAT_ID
+      - name: Tell Telegram
         if: always()
         env:
-          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ ! -f settle.json ]; then
             echo "::warning title=No verdict to send::settle produced no settle.json, so there is nothing to notify about."
@@ -221,18 +228,18 @@ jobs:
           verdict=$(node -e "console.log(require('./settle.json').verdict.state)")
           reason=$(node -e "console.log(require('./settle.json').verdict.reason)")
           enabled=""
-          if [ -n "$TEAMS_WEBHOOK_URL" ]; then
+          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
             enabled="--enabled"
           else
-            echo "TEAMS_WEBHOOK_URL is not set on this repository; notification stays off (the default)."
+            echo "TELEGRAM_BOT_TOKEN is not set on this repository; notification stays off (the default)."
           fi
-          node .automation/teams/notify.mjs \
+          node .automation/telegram/notify.mjs \
             --verdict "$verdict" --reason "$reason" $enabled \
             --repo "$GITHUB_REPOSITORY" \
             --pr "${{ github.event.pull_request.number }}" \
             --pr-url "${{ github.event.pull_request.html_url }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --json teams.json
+            --json telegram.json
 
       - name: Post the settle verdict
         if: always()
