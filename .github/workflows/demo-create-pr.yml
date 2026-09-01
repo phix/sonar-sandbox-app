@@ -1,10 +1,15 @@
-# Create the defective pull request the remediation pipeline works on.
+# Create the standing demo PR: a deliberately defective "order reporting,
+# stats & session auth" feature diff on demo/planted-smells, carrying the
+# planted findings of the smell catalogue for the remediation pipeline to work
+# on. The PR it opens is titled and bodied as a demo target (do not merge) so
+# nobody mistakes it for a real feature PR.
 #
 # Idempotent: if the PR is already open this reports it and stops, because the
 # PR number is what Sonar PR analysis, Jira links and the required status check
 # are keyed to. Use demo-reset to restore an existing PR's branch; use this only
 # when there is no open PR at all.
 name: 01 - create the demo PR
+run-name: "01 - open the standing demo PR (planted smells on demo/planted-smells, do not merge)"
 
 on:
   workflow_dispatch:
@@ -67,7 +72,7 @@ jobs:
         run: |
           gh pr create --repo "$GITHUB_REPOSITORY" \
             --base main --head "$DIRTY_BRANCH" \
-            --title "Add order reporting, stats and session auth" \
+            --title "demo: planted-smells remediation target — order reporting, stats & session auth (do not merge)" \
             --body-file .github/demo-pr-body.md
           gh pr list --repo "$GITHUB_REPOSITORY" --head "$DIRTY_BRANCH" --state open \
             --json number --jq '"opened PR #\(.[0].number)"'
