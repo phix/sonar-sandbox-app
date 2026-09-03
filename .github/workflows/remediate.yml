@@ -380,6 +380,18 @@ jobs:
           fi
           git config user.name  'sonar-remediation-bot'
           git config user.email 'sonar-remediation-bot@users.noreply.github.com'
+          # The open-ledger marker _branch-pr.yml committed when this branch
+          # was created (docs/decisions/multi-entry-point-flow.md). Removed
+          # here, in the SAME commit as the real fix, rather than waiting for
+          # the settle stage to confirm the fix worked — waiting would need
+          # an extra bot push just to delete one file, re-triggering a whole
+          # scan cycle for a purely cosmetic cleanup. A no-op run (nothing
+          # above changed anything) never reaches this line, so an attempt
+          # that fixed nothing correctly leaves the ledger entry open.
+          # Harmless when this PR was not pipeline-created (the demo PR,
+          # remediate-pr's batch case): the glob matches nothing and `-f`
+          # is silent about that.
+          rm -f .sonar-tracking/*.json
           git add -A
           # Two provenances, counted separately. Sweeping model-authored edits
           # into a commit whose subject says "deterministically" would put a
