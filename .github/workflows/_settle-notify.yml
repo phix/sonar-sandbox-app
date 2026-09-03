@@ -42,6 +42,14 @@ concurrency:
   group: automation-state
   cancel-in-progress: false
 
+env:
+  # Non-secret, pinned rather than left to repo `vars.` — see remediate.yml's
+  # own copy of this comment: an unset repo variable expands to empty in
+  # silence, which reads identically to a real credential problem. Needed
+  # here because the outcome-recording step below calls jira/run.mjs too.
+  JIRA_BASE_URL: https://1337software.atlassian.net
+  JIRA_PROJECT_KEY: SONAR
+
 jobs:
   settle:
     runs-on: ubuntu-latest
