@@ -1,0 +1,110 @@
+# A liveness probe for tinman's LLM endpoint, isolated from everything else.
+#
+# `remediate.yml` already proves tinman is reachable, but only as step 9 of a
+# ~45-minute job that needs an open PR and a findings set to get there. This
+# answers one question in well under a minute, any time, without touching the
+# demo PR or its attempt cap: is the tailnet up, does tinman answer, and does
+# the model actually generate a token back. No findings, no codemods, no push.
+#
+# Deliberately numbered 99, outside the 01-04 demo sequence (create the PR,
+# scan/gate/settle, remediate, reset) — this is a diagnostic utility, not a
+# pipeline stage, and sorts to the bottom of that list on purpose. See
+# phix/sonar-remediation-automation#21.
+name: 99 - tinman health check
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    # NO `container:`. Same reason as remediate.yml: inside a container
+    # Tailscale cannot get /dev/net/tun and falls back to a SOCKS5 proxy that
+    # client.mjs's `fetch` call never routes through. Only the host runner
+    # gives the TUN device the join actually needs.
+    steps:
+      - name: Pin node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Only file this job needs from the automation repo is client.mjs
+      # itself, which has zero external dependencies (no `npm ci` required).
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: phix/sonar-remediation-automation
+          path: .automation
+
+      - name: Join the tailnet
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      # tailscale/github-action reports outcome=success even after exhausting
+      # its retries (see remediate.yml) -- asserted rather than trusted here
+      # for the same reason.
+      - name: Assert the tailnet actually came up
+        run: |
+          state=$(tailscale status --json 2>/dev/null | node -e "
+            let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+              try{console.log(JSON.parse(s).BackendState||'NoState')}catch{console.log('Unreadable')}})")
+          echo "tailscale BackendState: $state"
+          if [ "$state" != "Running" ]; then
+            echo "::error title=Tailnet did not come up::tailscale up did not connect (BackendState=$state). Check the OAuth client: it needs the auth_keys scope AND must carry tag:ci, and tag:ci must exist in tagOwners."
+            exit 1
+          fi
+
+      # The tailnet IP, not the name `tinman` -- MagicDNS does not apply on an
+      # ephemeral runner (see remediate.yml). If this ever fails with a
+      # connection error rather than a timeout, suspect tinman got a new
+      # 100.x address; `tailscale status` on a machine with MagicDNS prints
+      # the current one.
+      - name: Prove tinman answers HTTP at all
+        env:
+          LLM_BASE_URL: http://100.102.1.50:11434/v1
+        run: |
+          if ! curl -sS -m 10 -o /dev/null -w 'GET /v1/models -> %{http_code}\n' \
+               "${LLM_BASE_URL}/models"; then
+            echo "::error title=tinman unreachable::The tailnet came up but ${LLM_BASE_URL} did not answer. Check that tinman is powered on, that tag:ci is permitted to reach it in the ACL, that its tailnet IP has not changed, and that Ollama binds beyond loopback (OLLAMA_HOST=0.0.0.0:11434 on tinman itself)."
+            exit 1
+          fi
+
+      # The actual hello world: one word in, one word expected back, through
+      # the same client.mjs the real remediation run uses -- so this proves
+      # the whole seam (streaming, model tag, thinking-disabled template),
+      # not just that a socket opens.
+      - name: Ask the model to say hello
+        env:
+          LLM_BASE_URL: http://100.102.1.50:11434/v1
+          LLM_MODEL: sonarfix:latest
+          # Not a credential. Ollama ignores bearer auth; this only satisfies
+          # configFromEnv's all-three-or-nothing guard.
+          LLM_API_KEY: tinman-local-unauthenticated
+        run: |
+          node --input-type=module -e "
+            import { chat, configFromEnv } from './.automation/codemods/agentic/client.mjs';
+
+            const config = configFromEnv();
+            if (!config.configured) {
+              console.error('LLM not configured, missing: ' + config.missing.join(', '));
+              process.exit(1);
+            }
+
+            try {
+              const { content, elapsedMs, attempts } = await chat(
+                config,
+                [{ role: 'user', content: 'Reply with exactly one word: hello' }],
+                { maxTokens: 16, headerTimeoutMs: 60_000, stallTimeoutMs: 30_000, totalTimeoutMs: 60_000, maxRetries: 1 }
+              );
+              console.log('tinman answered in ' + elapsedMs + 'ms (attempt ' + attempts + '/2): ' + JSON.stringify(content.trim()));
+            } catch (e) {
+              console.error('LLM call failed [' + (e.classification || 'unknown') + ']: ' + e.message);
+              process.exit(1);
+            }
+          "
