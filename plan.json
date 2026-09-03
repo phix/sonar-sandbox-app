@@ -14,7 +14,7 @@
         "is_eligible": true,
         "reason": "grouped for ticketing"
       },
-      "status": "Verified",
+      "status": "Ticketed",
       "attempt_count": 0,
       "branch_name": "sonar/gf-5ed9f085fbcc",
       "pr_number": 17,
