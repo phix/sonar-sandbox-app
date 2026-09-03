@@ -70,6 +70,37 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.SANDBOX_REPO_TOKEN }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: phix/sonar-remediation-automation
+          path: .automation
+
+      - name: Install
+        run: npm ci --prefix .automation
+
+      # A real commit, not an empty one — GitHub still needs at least one
+      # commit between head and base to allow a PR, but "at least one" does
+      # not have to mean content-free. `.sonar-tracking/<fingerprint>.json`
+      # is the exact findings this branch exists for (file, line, message),
+      # fetched fresh rather than passed through inputs so it is never stale
+      # relative to what Sonar reports right now. remediate.yml's own commit
+      # removes it again the moment a real fix attempt happens — the file's
+      # whole life is "this branch is open and nothing has been attempted
+      # yet"; a merged main never carries one.
+      - name: Fetch the findings this branch is about
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          node .automation/codemods/fetch-findings.mjs "${{ inputs.sonar_project_key }}" \
+            "branch:${{ inputs.base_branch }}" all-findings.json
+          node .automation/jira/filter-findings.mjs all-findings.json \
+            --fingerprints "${{ inputs.fingerprint }}" --out tracking-findings.json
+
       # Deterministic and derived from the fingerprint alone, so a second run
       # for the same group — however it got triggered — always names the same
       # branch and finds it, rather than opening a duplicate under a fresh name.
@@ -86,10 +117,23 @@ jobs:
             git config user.email 'sonar-remediation-bot@users.noreply.github.com'
             git checkout -q "${{ inputs.base_branch }}"
             git checkout -q -b "$name"
-            # An empty commit: GitHub refuses a PR with zero commits between
-            # head and base, and there is nothing to fix yet — remediate.yml
-            # is what pushes the actual change, later, onto this same branch.
-            git commit -q --allow-empty -m "Track ${{ inputs.rule }} in ${{ inputs.module }} (${{ inputs.jira_issue_key }})"
+            mkdir -p .sonar-tracking
+            node -e "
+              const findings = require('./tracking-findings.json');
+              const ledger = {
+                fingerprint: '${{ inputs.fingerprint }}',
+                rule: '${{ inputs.rule }}',
+                module: '${{ inputs.module }}',
+                severity: '${{ inputs.severity }}',
+                jira_issue_key: '${{ inputs.jira_issue_key }}',
+                sonar_project_key: '${{ inputs.sonar_project_key }}',
+                opened_at: new Date().toISOString(),
+                findings: findings.map((f) => ({ rule: f.rule, file: f.file, line: f.line, message: f.message }))
+              };
+              require('fs').writeFileSync('.sonar-tracking/${{ inputs.fingerprint }}.json', JSON.stringify(ledger, null, 2) + '\n');
+            "
+            git add .sonar-tracking/${{ inputs.fingerprint }}.json
+            git commit -q -m "Track ${{ inputs.rule }} in ${{ inputs.module }} (${{ inputs.jira_issue_key }})"
             git push -q origin "$name"
           fi
           echo "name=$name" >> "$GITHUB_OUTPUT"
@@ -125,19 +169,6 @@ jobs:
               ].join('\n')
             });
             core.setOutput('number', pr.data.number);
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
-      - name: Check out the automation repo
-        uses: actions/checkout@v5
-        with:
-          repository: phix/sonar-remediation-automation
-          path: .automation
-
-      - name: Install
-        run: npm ci --prefix .automation
 
       - uses: ./.github/actions/state-checkout
         with:
