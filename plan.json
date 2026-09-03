@@ -1,1 +1,25 @@
-{"items":[]}
+{
+  "items": [
+    {
+      "group_id": "web|css:S4667|MAJOR",
+      "group_fingerprint": "gf-5ed9f085fbcc",
+      "rule_key": "css:S4667",
+      "severity": "MAJOR",
+      "module_prefix": "web",
+      "finding_ids": [
+        "AaBPgi7EREXdXm6pmYiE"
+      ],
+      "finding_count": 1,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-3"
+    }
+  ]
+}
