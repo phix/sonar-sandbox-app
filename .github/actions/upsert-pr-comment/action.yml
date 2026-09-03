@@ -1,0 +1,37 @@
+# One scan/stage, one comment: rewritten in place on every re-run rather than
+# piling up a fresh comment each time. This is the same upsert-by-marker logic
+# that used to be copy-pasted per workflow (sonar-pr-scan.yml's gate and
+# settle jobs, remediate.yml's remediation and agentic reports) — factored out
+# so a new stage gets it by reference instead of a fifth copy.
+name: Upsert a PR comment
+description: Creates or updates (by an HTML marker) a single comment on a pull request from a markdown file.
+inputs:
+  file:
+    description: Path to the markdown file to post. A missing file is a warning, not a failure — some stages produce no report on some paths.
+    required: true
+  marker:
+    description: HTML comment marker identifying this stage's comment, e.g. "<!-- sonar-jira -->"
+    required: true
+  pr:
+    description: Pull request number
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/github-script@v8
+      with:
+        script: |
+          const fs = require('fs');
+          const file = `${{ inputs.file }}`;
+          if (!fs.existsSync(file)) {
+            core.warning(`${file} does not exist — nothing to post for this stage.`);
+            return;
+          }
+          const body = fs.readFileSync(file, 'utf8');
+          const marker = `${{ inputs.marker }}`;
+          const { owner, repo } = context.repo;
+          const issue_number = Number(`${{ inputs.pr }}`);
+          const all = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+          const mine = all.find((c) => c.body && c.body.includes(marker));
+          if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+          else await github.rest.issues.createComment({ owner, repo, issue_number, body });

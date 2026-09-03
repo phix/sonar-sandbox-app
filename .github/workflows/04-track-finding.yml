@@ -1,0 +1,135 @@
+# Entry point: one specific finding-group, at whatever stage it already
+# stands. Covers BOTH "I saw this on the Sonar dashboard, nothing exists for
+# it yet" and "I already filed a Jira ticket for this by hand" — they are the
+# same operation here, because jira/run.mjs's own dedupe (plan first, then a
+# Jira label search) finds a human-made ticket exactly the way it finds one
+# this pipeline made, as long as it carries the group's fingerprint label. If
+# you filed a ticket by hand, put "Group fingerprint: gf-..." as a label on
+# it (get the fingerprint with `npm run jira:groups` locally against a
+# findings.json) and this run will adopt it rather than duplicate it.
+#
+# Re-entrant: run this again on the same fingerprint at any point and it picks
+# up at whatever is still missing, per jira/resume.mjs.
+name: 04 - track a finding
+
+on:
+  workflow_dispatch:
+    inputs:
+      fingerprint:
+        description: >-
+          Group fingerprint to track (module|rule|severity hash). Get one from
+          `npm run jira:groups` locally, or the "Group fingerprint" line on an
+          existing Jira ticket or PR body.
+        type: string
+        required: true
+      base_branch:
+        type: string
+        default: main
+      auto_continue:
+        description: Automatically remediate the PR once its first scan resolves
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  SONAR_PROJECT_KEY: phix_sonar-sandbox-app
+  AUTOMATION_REPO: phix/sonar-remediation-automation
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: automation-state
+      cancel-in-progress: false
+    outputs:
+      next: ${{ steps.resolve.outputs.next }}
+      rule: ${{ steps.resolve.outputs.rule }}
+      module: ${{ steps.resolve.outputs.module }}
+      severity: ${{ steps.resolve.outputs.severity }}
+      finding_count: ${{ steps.resolve.outputs.finding_count }}
+      jira_issue_key: ${{ steps.resolve.outputs.jira_issue_key }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.AUTOMATION_REPO }}
+          path: .automation
+
+      - name: Install
+        run: npm ci --prefix .automation
+
+      - uses: ./.github/actions/state-checkout
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - id: resolve
+        name: Where does this group already stand?
+        run: |
+          node .automation/jira/resume.mjs --plan .state/plan.json \
+            --fingerprint "${{ inputs.fingerprint }}" --json resume.json
+          next=$(node -e "console.log(require('./resume.json').next)")
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          if [ "$next" = "ticket" ]; then
+            # Not in the plan yet — _file-ticket.yml will derive its metadata
+            # itself from a fresh fetch. Nothing to report here.
+            exit 0
+          fi
+          node -e "
+            const r = require('./resume.json').item;
+            const out = require('fs').createWriteStream(process.env.GITHUB_OUTPUT, {flags:'a'});
+            out.write('rule='+r.rule_key+'\n');
+            out.write('module='+r.module_prefix+'\n');
+            out.write('severity='+(r.severity||'UNKNOWN')+'\n');
+            out.write('finding_count='+r.finding_count+'\n');
+            out.write('jira_issue_key='+r.jira_issue_key+'\n');
+            out.write('pr_number='+(r.pr_number||'')+'\n');
+          "
+
+  ticket:
+    needs: resolve
+    if: needs.resolve.outputs.next == 'ticket'
+    uses: ./.github/workflows/_file-ticket.yml
+    with:
+      sonar_project_key: phix_sonar-sandbox-app
+      scope: branch:${{ inputs.base_branch }}
+      fingerprints: ${{ inputs.fingerprint }}
+    secrets: inherit
+
+  branch-pr:
+    needs: [resolve, ticket]
+    # Runs whenever there is a ticket to build a branch/PR against — either
+    # the `ticket` job just filed one, or `resolve` found one already existed
+    # and there was nothing for `ticket` to do (it does not run at all).
+    if: |
+      always() && !failure() && !cancelled() &&
+      (needs.resolve.outputs.next == 'ticket' || needs.resolve.outputs.next == 'branch' || needs.resolve.outputs.next == 'pr')
+    uses: ./.github/workflows/_branch-pr.yml
+    with:
+      fingerprint: ${{ inputs.fingerprint }}
+      rule: ${{ needs.ticket.outputs.groups_json != '' && fromJson(needs.ticket.outputs.groups_json)[0].rule || needs.resolve.outputs.rule }}
+      module: ${{ needs.ticket.outputs.groups_json != '' && fromJson(needs.ticket.outputs.groups_json)[0].module || needs.resolve.outputs.module }}
+      severity: ${{ needs.ticket.outputs.groups_json != '' && fromJson(needs.ticket.outputs.groups_json)[0].severity || needs.resolve.outputs.severity }}
+      finding_count: ${{ needs.ticket.outputs.groups_json != '' && fromJson(needs.ticket.outputs.groups_json)[0].findingCount || needs.resolve.outputs.finding_count }}
+      jira_issue_key: ${{ needs.ticket.outputs.groups_json != '' && fromJson(needs.ticket.outputs.groups_json)[0].jira_issue_key || needs.resolve.outputs.jira_issue_key }}
+      sonar_project_key: phix_sonar-sandbox-app
+      base_branch: ${{ inputs.base_branch }}
+      auto_continue: ${{ inputs.auto_continue }}
+    secrets: inherit
+
+  already-tracked:
+    needs: resolve
+    if: needs.resolve.outputs.next == 'remediate'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::notice::Ticket, branch and PR already exist for ${{ inputs.fingerprint }} — PR #${{ needs.resolve.outputs.pr_number }}, ${{ needs.resolve.outputs.jira_issue_key }}. Nothing to create. Run \"05 - remediate a PR\" against that PR number if it still needs fixing."

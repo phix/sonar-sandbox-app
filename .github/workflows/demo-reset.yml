@@ -9,7 +9,7 @@
 # The reset is the one operation here that destroys work by design, so it is
 # the one that least deserves the benefit of the doubt. Everything it restores,
 # it then verifies.
-name: 04 - reset the demo
+name: 06 - reset the demo
 
 on:
   workflow_dispatch:

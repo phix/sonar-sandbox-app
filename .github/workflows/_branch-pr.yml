@@ -1,0 +1,158 @@
+# Module: create (or find) the branch and PR for ONE group. Called once per
+# group — by onboard-backlog as a matrix, by track-finding for a single one —
+# never for the "PR already exists" entry point, where there is nothing to
+# create.
+#
+# Idempotent: if the branch already exists (a previous partial run got this
+# far and stopped, or crashed after pushing but before opening the PR), this
+# does not recreate it — it finds the existing PR and records it, the same
+# "resume from wherever" property jira/resume.mjs gives every other stage.
+name: _branch-pr
+
+on:
+  workflow_call:
+    inputs:
+      fingerprint:
+        required: true
+        type: string
+      rule:
+        required: true
+        type: string
+      module:
+        required: true
+        type: string
+      severity:
+        required: true
+        type: string
+      finding_count:
+        required: true
+        type: string
+      jira_issue_key:
+        required: true
+        type: string
+      sonar_project_key:
+        required: true
+        type: string
+      base_branch:
+        required: false
+        type: string
+        default: main
+      auto_continue:
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      pr_number:
+        value: ${{ jobs.branch-pr.outputs.pr_number }}
+      branch_name:
+        value: ${{ jobs.branch-pr.outputs.branch_name }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: automation-state
+  cancel-in-progress: false
+
+env:
+  JIRA_BASE_URL: https://1337software.atlassian.net
+
+jobs:
+  branch-pr:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      branch_name: sonar/${{ inputs.fingerprint }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      # Deterministic and derived from the fingerprint alone, so a second run
+      # for the same group — however it got triggered — always names the same
+      # branch and finds it, rather than opening a duplicate under a fresh name.
+      - name: Ensure the branch exists
+        id: branch
+        env:
+          GH_TOKEN: ${{ secrets.SANDBOX_REPO_TOKEN }}
+        run: |
+          name="sonar/${{ inputs.fingerprint }}"
+          if git ls-remote --exit-code --heads origin "$name" >/dev/null 2>&1; then
+            echo "branch $name already exists"
+          else
+            git config user.name  'sonar-remediation-bot'
+            git config user.email 'sonar-remediation-bot@users.noreply.github.com'
+            git checkout -q "${{ inputs.base_branch }}"
+            git checkout -q -b "$name"
+            # An empty commit: GitHub refuses a PR with zero commits between
+            # head and base, and there is nothing to fix yet — remediate.yml
+            # is what pushes the actual change, later, onto this same branch.
+            git commit -q --allow-empty -m "Track ${{ inputs.rule }} in ${{ inputs.module }} (${{ inputs.jira_issue_key }})"
+            git push -q origin "$name"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure the PR exists
+        id: pr
+        uses: actions/github-script@v8
+        env:
+          BRANCH: ${{ steps.branch.outputs.name }}
+        with:
+          script: |
+            const branch = process.env.BRANCH;
+            const { owner, repo } = context.repo;
+            const open = await github.rest.pulls.list({ owner, repo, state: 'open', head: `${owner}:${branch}` });
+            if (open.data.length) {
+              core.info(`PR #${open.data[0].number} already open for ${branch}`);
+              core.setOutput('number', open.data[0].number);
+              return;
+            }
+            const dashboard = `https://sonarcloud.io/project/issues?id=${encodeURIComponent('${{ inputs.sonar_project_key }}')}`
+              + `&resolved=false`;
+            const pr = await github.rest.pulls.create({
+              owner, repo, head: branch, base: '${{ inputs.base_branch }}',
+              title: `[${{ inputs.module }}] ${{ inputs.rule }}: ${{ inputs.finding_count }} finding(s) (${{ inputs.severity }})`,
+              body: [
+                `Jira: ${{ env.JIRA_BASE_URL }}/browse/${{ inputs.jira_issue_key }}`,
+                `Sonar: ${dashboard}`,
+                '',
+                `Group fingerprint: ${{ inputs.fingerprint }}`,
+                '',
+                'Opened by the pipeline; no fix yet. Run "05 - remediate a PR" against this PR number, '
+                  + 'or it will run automatically if this group was ticketed with auto-continue.'
+              ].join('\n')
+            });
+            core.setOutput('number', pr.data.number);
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: phix/sonar-remediation-automation
+          path: .automation
+
+      - name: Install
+        run: npm ci --prefix .automation
+
+      - uses: ./.github/actions/state-checkout
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - name: Record the branch and PR
+        run: |
+          node .automation/jira/record.mjs branch --plan .state/plan.json \
+            --fingerprint "${{ inputs.fingerprint }}" --name "${{ steps.branch.outputs.name }}"
+          autoFlag=""
+          [ "${{ inputs.auto_continue }}" = "true" ] && autoFlag="--auto-continue"
+          node .automation/jira/record.mjs pr --plan .state/plan.json \
+            --fingerprint "${{ inputs.fingerprint }}" --pr "${{ steps.pr.outputs.number }}" $autoFlag
+
+      - uses: ./.github/actions/state-commit
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+          message: "Branch+PR #${{ steps.pr.outputs.number }} for ${{ inputs.fingerprint }}"

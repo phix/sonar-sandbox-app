@@ -1,0 +1,192 @@
+# Module: read the gate, decide ready/red, optionally auto-merge, tell
+# Telegram, and — new — tell the ticket what happened. Extracted from
+# sonar-pr-scan.yml's `settle` job so onboard-backlog/track-finding's
+# auto-continue watcher can call the same logic a PR-triggered scan does,
+# rather than reimplementing it.
+#
+# Deliberately a SEPARATE job from the gate check in whatever calls this, per
+# the reasoning that used to live inline in sonar-pr-scan.yml: `gate` is the
+# required status context in branch protection, and settle must never be able
+# to block a merge itself — a bug here should not be able to fail an
+# otherwise-green PR the way a bug in `gate` legitimately can.
+name: _settle-notify
+
+on:
+  workflow_call:
+    inputs:
+      sonar_project_key:
+        required: true
+        type: string
+      pr:
+        required: true
+        type: string
+      pr_url:
+        required: true
+        type: string
+      pr_node_id:
+        required: false
+        type: string
+        default: ''
+    outputs:
+      state:
+        description: ready or red
+        value: ${{ jobs.settle.outputs.state }}
+      reason:
+        value: ${{ jobs.settle.outputs.reason }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: automation-state
+  cancel-in-progress: false
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    outputs:
+      state: ${{ steps.settle.outputs.state }}
+      reason: ${{ steps.settle.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: phix/sonar-remediation-automation
+          path: .automation
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install
+        run: npm ci --prefix .automation
+
+      # Absent is a legitimate state: no remediation has run on this branch yet.
+      # settle then reports red-undetermined naming the missing input, which is
+      # the honest answer -- not a green that ignored policy refusals.
+      - name: Fetch the remediation record, if remediation has run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Looked up by ARTIFACT NAME, not by branch — see remediate.yml's
+          # own comment on this for why a --branch filter would misfire.
+          name="remediation-record-pr${{ inputs.pr }}"
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name&per_page=5" \
+            --jq '[.artifacts[] | select(.expired == false)][0].workflow_run.id // empty')
+          if [ -z "$run_id" ]; then
+            echo "no unexpired $name artifact; settle will report the dispositions as undetermined"
+            exit 0
+          fi
+          echo "downloading $name from remediate run $run_id"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$name" --dir . || \
+            echo "::warning title=Record could not be downloaded::run $run_id listed $name but it did not download."
+
+      - id: settle
+        name: Settle
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORG: phix
+          PR_NODE_ID: ${{ inputs.pr_node_id }}
+        run: |
+          args=""
+          [ -f dispositions.json ] && args="--dispositions dispositions.json"
+          if [ "${{ vars.AUTO_MERGE_ENABLED }}" = "true" ]; then args="$args --auto-merge"; fi
+          node .automation/settle/run.mjs \
+            --project "${{ inputs.sonar_project_key }}" \
+            --pr "${{ inputs.pr }}" \
+            $args --json settle.json
+          echo "state=$(node -e "console.log(require('./settle.json').verdict.state)")" >> "$GITHUB_OUTPUT"
+          echo "reason=$(node -e "console.log(require('./settle.json').verdict.reason)")" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/upsert-pr-comment
+        with:
+          file: settle-comment.md
+          marker: "<!-- sonar-settle -->"
+          pr: ${{ inputs.pr }}
+
+      # The one message the whole loop exists to produce. See notify.mjs and
+      # docs/decisions/notify-telegram-not-teams.md in the automation repo for
+      # the tri-state (off / on-unconfigured-so-red / delivered) reasoning.
+      # preflight: optional-secret TELEGRAM_BOT_TOKEN
+      # preflight: optional-secret TELEGRAM_CHAT_ID
+      - name: Tell Telegram
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ ! -f settle.json ]; then
+            echo "::warning title=No verdict to send::settle produced no settle.json, so there is nothing to notify about."
+            exit 0
+          fi
+          enabled=""
+          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+            enabled="--enabled"
+          else
+            echo "TELEGRAM_BOT_TOKEN is not set on this repository; notification stays off (the default)."
+          fi
+          node .automation/telegram/notify.mjs \
+            --verdict "${{ steps.settle.outputs.state }}" --reason "${{ steps.settle.outputs.reason }}" $enabled \
+            --repo "$GITHUB_REPOSITORY" \
+            --pr "${{ inputs.pr }}" \
+            --pr-url "${{ inputs.pr_url }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --json telegram.json
+
+      # The piece that was missing entirely before: a ticket learns whether
+      # remediation on ITS PR actually worked, per group — not the whole PR's
+      # gate, which can stay red on an unrelated axis (new-code coverage) even
+      # once every finding a given ticket names is gone. jira/run.mjs's
+      # resolved-pass (docs/decisions/jira-needs-work-and-outcome-comments.md
+      # in the automation repo) is what tells the two apart: a group missing
+      # from this fresh fetch gets relabelled `ready` regardless of the PR
+      # gate's own state; a group still present gets this verdict as a comment.
+      - uses: ./.github/actions/state-checkout
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - name: Fetch the PR's current findings
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: node .automation/codemods/fetch-findings.mjs "${{ inputs.sonar_project_key }}" "${{ inputs.pr }}" jira-findings.json
+
+      # Ticketing stays opt-in PER GROUP, even here. Passing every current
+      # finding straight to jira/run.mjs would file brand-new tickets for
+      # groups that were never enabled for it — dedupe only stops a SECOND
+      # ticket for a group that already has one, it does not refuse a group
+      # that was legitimately never ticketed. So this keeps only the groups
+      # the plan already has a jira_issue_key for, and skips entirely if none
+      # of them do — a PR that never turned Jira on gets no ticket here either.
+      - id: ticketed
+        name: Keep only groups this PR already has a ticket for
+        run: |
+          groups="$(node .automation/jira/groups.mjs jira-findings.json --plan .state/plan.json \
+            --project-key "${{ inputs.sonar_project_key }}")"
+          fps=$(node -e "console.log(JSON.parse(process.argv[1]).filter(g=>g.jira_issue_key).map(g=>g.fingerprint).join(','))" "$groups")
+          echo "fingerprints=$fps" >> "$GITHUB_OUTPUT"
+          if [ -z "$fps" ]; then
+            echo "no group on this PR was ever ticketed — Jira stays opt-in, skipping the outcome pass"
+          fi
+
+      - name: Record the remediation outcome on the ticket(s)
+        if: ${{ steps.ticketed.outputs.fingerprints != '' }}
+        env:
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          SONAR_ORG: phix
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          node .automation/jira/filter-findings.mjs jira-findings.json \
+            --fingerprints "${{ steps.ticketed.outputs.fingerprints }}" --out jira-findings.json
+          node .automation/jira/run.mjs jira-findings.json --enabled \
+            --plan .state/plan.json --pr "${{ inputs.pr }}" --pr-url "${{ inputs.pr_url }}" \
+            --verdict "${{ steps.settle.outputs.state }}" --reason "${{ steps.settle.outputs.reason }}" \
+            --json jira-outcome.json
+
+      - uses: ./.github/actions/state-commit
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+          message: "Record settle outcome for PR #${{ inputs.pr }}"

@@ -141,128 +141,24 @@ jobs:
   # This is also why settle is not a step in remediate.yml: remediation pushes,
   # the push re-triggers THIS workflow, and only here is the gate the fixed
   # code's gate rather than the one from before the fix.
+  #
+  # Factored into _settle-notify.yml so the auto-continue watcher
+  # (auto-continue-watch.yml) can call the exact same settle+notify+Jira-outcome
+  # logic a PR-triggered scan runs here, instead of a second implementation.
   settle:
     name: settle
     needs: gate
     if: always() && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the automation repo
-        uses: actions/checkout@v5
-        with:
-          repository: phix/sonar-remediation-automation
-          path: .automation
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
-      - name: Install
-        run: npm ci --prefix .automation
-
-      # Absent is a legitimate state: no remediation has run on this branch yet.
-      # settle then reports red-undetermined naming the missing input, which is
-      # the honest answer -- not a green that ignored policy refusals.
-      - name: Fetch the remediation record, if remediation has run
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Looked up by ARTIFACT NAME, not by branch. remediate.yml is
-          # workflow_dispatch, so its run is attributed to whatever ref it was
-          # dispatched from -- usually main, never the PR head -- and a
-          # --branch filter would quietly find nothing and report "no
-          # remediation has run" for a PR that had just been remediated. The
-          # artifact name carries the PR number, which is the actual
-          # discriminator.
-          name="remediation-record-pr${{ github.event.pull_request.number }}"
-          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name&per_page=5" \
-            --jq '[.artifacts[] | select(.expired == false)][0].workflow_run.id // empty')
-          if [ -z "$run_id" ]; then
-            echo "no unexpired $name artifact; settle will report the dispositions as undetermined"
-            exit 0
-          fi
-          echo "downloading $name from remediate run $run_id"
-          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$name" --dir . || \
-            echo "::warning title=Record could not be downloaded::run $run_id listed $name but it did not download."
-
-      - name: Settle
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_ORG: phix
-          # settle/automerge.mjs reads this; unset is exactly "not configured",
-          # which runAutoMerge only reaches once --auto-merge is also passed.
-          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
-        run: |
-          args=""
-          [ -f dispositions.json ] && args="--dispositions dispositions.json"
-          # `pull_request` carries no workflow_dispatch inputs, so "on" has to
-          # be a repository variable rather than a per-run flag. Unset reads as
-          # false — the same safe default `auto_merge` has always had — so
-          # adopting this repo with the variable never set changes nothing.
-          # Flip it at github.com/phix/sonar-sandbox-app/settings/variables/actions.
-          if [ "${{ vars.AUTO_MERGE_ENABLED }}" = "true" ]; then args="$args --auto-merge"; fi
-          node .automation/settle/run.mjs \
-            --project phix_sonar-sandbox-app \
-            --pr "${{ github.event.pull_request.number }}" \
-            $args --json settle.json
-
-      # The one message the whole loop exists to produce. Tri-state, and the
-      # three states are genuinely different outcomes:
-      #   off (no TELEGRAM_BOT_TOKEN)  -> silent and green; nobody asked.
-      #   on but unconfigured          -> notify.mjs exits 1; somebody asked and
-      #                                   did not get it.
-      #   on and configured            -> delivered, or a red step saying why.
-      # `--enabled` is passed only when the token exists, which is what keeps
-      # the first two apart. Collapsing them would let a missing credential
-      # read as "notifications are turned off" forever. The chat id is
-      # deliberately NOT part of the gate: token-without-chat-id means
-      # somebody configured half of it, and that must surface as notify.mjs's
-      # red ("TELEGRAM_CHAT_ID unset"), never as off.
-      # (Teams was descoped 2026-08-31 — see notify-telegram-not-teams.md in
-      # the automation repo's docs/decisions.)
-      # preflight: optional-secret TELEGRAM_BOT_TOKEN
-      # preflight: optional-secret TELEGRAM_CHAT_ID
-      - name: Tell Telegram
-        if: always()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ ! -f settle.json ]; then
-            echo "::warning title=No verdict to send::settle produced no settle.json, so there is nothing to notify about."
-            exit 0
-          fi
-          verdict=$(node -e "console.log(require('./settle.json').verdict.state)")
-          reason=$(node -e "console.log(require('./settle.json').verdict.reason)")
-          enabled=""
-          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
-            enabled="--enabled"
-          else
-            echo "TELEGRAM_BOT_TOKEN is not set on this repository; notification stays off (the default)."
-          fi
-          node .automation/telegram/notify.mjs \
-            --verdict "$verdict" --reason "$reason" $enabled \
-            --repo "$GITHUB_REPOSITORY" \
-            --pr "${{ github.event.pull_request.number }}" \
-            --pr-url "${{ github.event.pull_request.html_url }}" \
-            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --json telegram.json
-
-      - name: Post the settle verdict
-        if: always()
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const fs = require('fs');
-            if (!fs.existsSync('settle-comment.md')) {
-              core.warning('settle produced no report');
-              return;
-            }
-            const body = fs.readFileSync('settle-comment.md', 'utf8');
-            const marker = '<!-- sonar-settle -->';
-            const { owner, repo } = context.repo;
-            const issue_number = context.payload.pull_request.number;
-            const all = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
-            const mine = all.find((c) => c.body && c.body.includes(marker));
-            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
-            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+    # A called reusable workflow's permissions are capped by the caller's —
+    # the top-level `permissions:` above is read-only for contents, but
+    # _settle-notify.yml pushes to automation-state and comments on the PR.
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/_settle-notify.yml
+    with:
+      sonar_project_key: phix_sonar-sandbox-app
+      pr: ${{ github.event.pull_request.number }}
+      pr_url: ${{ github.event.pull_request.html_url }}
+      pr_node_id: ${{ github.event.pull_request.node_id }}
+    secrets: inherit
