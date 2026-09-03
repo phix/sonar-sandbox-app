@@ -189,13 +189,18 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORG: phix
+          # settle/automerge.mjs reads this; unset is exactly "not configured",
+          # which runAutoMerge only reaches once --auto-merge is also passed.
+          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
         run: |
           args=""
           [ -f dispositions.json ] && args="--dispositions dispositions.json"
-          # Auto-merge is NOT passed. Off is the default and the only safe one
-          # here: this workflow runs on every push with no way for a human to
-          # opt in, and "nobody asked" must stay distinguishable from "asked
-          # and did not get it".
+          # `pull_request` carries no workflow_dispatch inputs, so "on" has to
+          # be a repository variable rather than a per-run flag. Unset reads as
+          # false — the same safe default `auto_merge` has always had — so
+          # adopting this repo with the variable never set changes nothing.
+          # Flip it at github.com/phix/sonar-sandbox-app/settings/variables/actions.
+          if [ "${{ vars.AUTO_MERGE_ENABLED }}" = "true" ]; then args="$args --auto-merge"; fi
           node .automation/settle/run.mjs \
             --project phix_sonar-sandbox-app \
             --pr "${{ github.event.pull_request.number }}" \
