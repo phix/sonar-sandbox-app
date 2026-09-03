@@ -14,10 +14,10 @@
         "is_eligible": true,
         "reason": "grouped for ticketing"
       },
-      "status": "Ticketed",
+      "status": "PRed",
       "attempt_count": 0,
-      "branch_name": null,
-      "pr_number": null,
+      "branch_name": "sonar/gf-5ed9f085fbcc",
+      "pr_number": 17,
       "auto_continue": false,
       "jira_issue_key": "SONAR-3"
     }
