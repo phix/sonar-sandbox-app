@@ -1,0 +1,108 @@
+# Entry point: a project just adopted this pipeline and has a backlog of
+# findings, none of them ticketed, branched or PR'd yet. Files a ticket per
+# group (throttled to max_concurrent — see jira/queue.mjs in the automation
+# repo for why one giant PR is wrong for a backlog) and opens a branch+PR for
+# each one selected.
+#
+# Safe to re-run: groups already ticketed/branched/PR'd are skipped by
+# jira/queue.mjs's capacity accounting, so running this again just picks up
+# wherever the last run's cap left off — there is no separate "resume"
+# workflow for the bulk case, this IS the resume.
+name: 03 - onboard a backlog
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_concurrent:
+        description: How many groups to have in flight (ticketed+PR'd, not yet Verified) at once
+        type: string
+        default: '5'
+      base_branch:
+        type: string
+        default: main
+      auto_continue:
+        description: Automatically remediate each opened PR once its first scan resolves
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  SONAR_PROJECT_KEY: phix_sonar-sandbox-app
+  AUTOMATION_REPO: phix/sonar-remediation-automation
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: automation-state
+      cancel-in-progress: false
+    outputs:
+      count: ${{ steps.select.outputs.count }}
+      fingerprints: ${{ steps.select.outputs.fingerprints }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.AUTOMATION_REPO }}
+          path: .automation
+
+      - name: Install
+        run: npm ci --prefix .automation
+
+      - name: Fetch everything currently on ${{ inputs.base_branch }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: node .automation/codemods/fetch-findings.mjs "$SONAR_PROJECT_KEY" "branch:${{ inputs.base_branch }}" findings.json
+
+      - uses: ./.github/actions/state-checkout
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - id: select
+        name: Select this round's batch, capped at max_concurrent
+        run: |
+          node .automation/jira/queue.mjs findings.json --plan .state/plan.json \
+            --max-concurrent "${{ inputs.max_concurrent }}" --project-key "$SONAR_PROJECT_KEY" --json queue.json
+          count=$(node -e "console.log(require('./queue.json').selected.length)")
+          fps=$(node -e "console.log(require('./queue.json').selected.map(s=>s.fingerprint).join(','))")
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "fingerprints=$fps" >> "$GITHUB_OUTPUT"
+          echo "$count group(s) selected this round."
+
+  ticket:
+    needs: select
+    if: needs.select.outputs.count != '0'
+    uses: ./.github/workflows/_file-ticket.yml
+    with:
+      sonar_project_key: phix_sonar-sandbox-app
+      scope: branch:main
+      fingerprints: ${{ needs.select.outputs.fingerprints }}
+    secrets: inherit
+
+  branch-pr:
+    needs: ticket
+    strategy:
+      max-parallel: 5
+      matrix:
+        include: ${{ fromJson(needs.ticket.outputs.groups_json) }}
+    uses: ./.github/workflows/_branch-pr.yml
+    with:
+      fingerprint: ${{ matrix.fingerprint }}
+      rule: ${{ matrix.rule }}
+      module: ${{ matrix.module }}
+      severity: ${{ matrix.severity }}
+      finding_count: ${{ matrix.findingCount }}
+      jira_issue_key: ${{ matrix.jira_issue_key }}
+      sonar_project_key: phix_sonar-sandbox-app
+      base_branch: ${{ inputs.base_branch }}
+      auto_continue: ${{ inputs.auto_continue }}
+    secrets: inherit

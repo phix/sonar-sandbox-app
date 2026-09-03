@@ -1,0 +1,36 @@
+# Commits and pushes whatever changed under a state-checkout directory back
+# to automation-state. Paired with state-checkout/action.yml — see that
+# file's header for the concurrency-group requirement, which applies here
+# too since this is the write half of the same race.
+name: Commit automation state
+description: Commits and pushes changes under a state-checkout directory back to automation-state.
+inputs:
+  path:
+    description: The same directory passed to state-checkout
+    default: .state
+  token:
+    description: Token with push rights on this repo (SANDBOX_REPO_TOKEN)
+    required: true
+  message:
+    description: Commit message
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        cd "${{ inputs.path }}"
+        git config user.name  'sonar-remediation-bot'
+        git config user.email 'sonar-remediation-bot@users.noreply.github.com'
+        if git diff --quiet && [ -z "$(git status --porcelain)" ]; then
+          echo "nothing changed in automation state"
+          exit 0
+        fi
+        git add -A
+        git commit -q -m "${{ inputs.message }}"
+        git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+          2>/dev/null || git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+        git push -q origin automation-state

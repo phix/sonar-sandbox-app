@@ -1,0 +1,70 @@
+# Checks out (or creates) automation-state — the orphan branch that carries
+# plan.json between runs, so "which groups already have a ticket/branch/PR"
+# survives across separately-triggered workflows instead of resetting to
+# empty every time. See docs/decisions/multi-entry-point-flow.md in the
+# automation repo for why a job-local file was not enough.
+#
+# MUST be called from inside a job that already carries a normal checkout of
+# THIS repo (so `origin` exists for the ls-remote probe below), and that job
+# MUST declare:
+#   concurrency:
+#     group: automation-state
+#     cancel-in-progress: false
+# Every job that reads or writes plan.json needs that same group — it is what
+# turns "N group-PRs finish around the same time" from a lost-update race
+# into a plain FIFO queue. See state-commit/action.yml, the paired action.
+name: Check out automation state
+description: Checks out the automation-state branch into a subdirectory, creating it as an empty orphan if this is the first write.
+inputs:
+  path:
+    description: Directory to check the state branch out into
+    default: .state
+  token:
+    description: Token with push rights on this repo (SANDBOX_REPO_TOKEN) — needed to create the branch the first time
+    required: true
+outputs:
+  existed:
+    description: "'true' if automation-state already existed, 'false' if it was just created"
+    value: ${{ steps.probe.outputs.existed }}
+runs:
+  using: composite
+  steps:
+    - id: probe
+      shell: bash
+      run: |
+        if git ls-remote --exit-code --heads origin automation-state >/dev/null 2>&1; then
+          echo "existed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "existed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Check out the existing state branch
+      if: steps.probe.outputs.existed == 'true'
+      uses: actions/checkout@v5
+      with:
+        ref: automation-state
+        path: ${{ inputs.path }}
+        token: ${{ inputs.token }}
+
+    # A fresh clone-and-orphan rather than `git checkout --orphan` on the
+    # already-checked-out working tree: that tree is on whatever ref the
+    # calling job checked out (usually a PR branch or main), and orphaning it
+    # in place would strip the calling job's own files out from under it.
+    - name: Create automation-state as an empty orphan branch
+      if: steps.probe.outputs.existed == 'false'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        mkdir -p "${{ inputs.path }}"
+        cd "${{ inputs.path }}"
+        git init -q
+        git checkout -q -b automation-state
+        git config user.name  'sonar-remediation-bot'
+        git config user.email 'sonar-remediation-bot@users.noreply.github.com'
+        echo '{"items":[]}' > plan.json
+        git add plan.json
+        git commit -q -m "Initialize automation-state"
+        git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+        git push -q origin automation-state

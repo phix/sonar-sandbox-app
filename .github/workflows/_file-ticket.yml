@@ -1,0 +1,108 @@
+# Module: file (or find) a Jira ticket for every group in scope, BEFORE any
+# branch or PR exists for it. This is the piece that was missing before —
+# ticketing used to run only inside remediate.yml, after code had already
+# changed and after the PR had already existed for however long. Called by
+# onboard-backlog and track-finding; NOT by remediate.yml, which already has
+# its own findings.json in hand from fetching them for remediation and would
+# gain nothing from a second, redundant fetch through this module.
+#
+# Self-contained: fetches its own findings by `scope` rather than being handed
+# a findings.json, because a reusable workflow invoked via `uses:` runs on a
+# fresh runner with no access to the caller job's filesystem — anything it
+# needs, it has to produce or download itself.
+name: _file-ticket
+
+on:
+  workflow_call:
+    inputs:
+      sonar_project_key:
+        required: true
+        type: string
+      scope:
+        description: Passed straight to fetch-findings.mjs — "branch:main" or a PR number
+        required: true
+        type: string
+      fingerprints:
+        description: Comma-separated group fingerprints to restrict ticketing to. Empty = every group in scope.
+        required: false
+        type: string
+        default: ''
+      pr_url:
+        description: Set only when a PR already exists for this scope (remediate.yml's case is handled separately; this covers a future PR-scoped call)
+        required: false
+        type: string
+        default: ''
+    outputs:
+      groups_json:
+        description: JSON array of {fingerprint, rule, module, severity, findingCount, jira_issue_key} for every group in scope, ticket included
+        value: ${{ jobs.file-ticket.outputs.groups_json }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: automation-state
+  cancel-in-progress: false
+
+env:
+  AUTOMATION_REPO: phix/sonar-remediation-automation
+
+jobs:
+  file-ticket:
+    runs-on: ubuntu-latest
+    outputs:
+      groups_json: ${{ steps.groups.outputs.groups_json }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.AUTOMATION_REPO }}
+          path: .automation
+
+      - name: Install
+        run: npm ci --prefix .automation
+
+      - name: Fetch findings in scope
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: node .automation/codemods/fetch-findings.mjs "${{ inputs.sonar_project_key }}" "${{ inputs.scope }}" findings.json
+
+      - name: Restrict to the given groups
+        if: ${{ inputs.fingerprints != '' }}
+        run: |
+          node .automation/jira/filter-findings.mjs findings.json \
+            --fingerprints "${{ inputs.fingerprints }}" --out findings.json
+
+      - uses: ./.github/actions/state-checkout
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - name: File tickets
+        env:
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          SONAR_ORG: phix
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          args=""
+          [ -n "${{ inputs.pr_url }}" ] && args="--pr-url ${{ inputs.pr_url }}"
+          node .automation/jira/run.mjs findings.json --enabled \
+            --plan .state/plan.json $args --json jira-run.json
+
+      - id: groups
+        name: Report the groups this call covered, ticket keys included
+        run: |
+          json="$(node .automation/jira/groups.mjs findings.json --plan .state/plan.json \
+            --project-key "${{ inputs.sonar_project_key }}")"
+          echo "groups_json=$json" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/state-commit
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+          message: "Ticket ${{ inputs.scope }}"

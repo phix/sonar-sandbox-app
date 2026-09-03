@@ -1,0 +1,85 @@
+# Fires on every completion of "02 - scan, gate & settle" and checks whether
+# the PR it just scanned belongs to a group that was ticketed/branched/PR'd
+# with auto_continue — if so, dispatches remediation without a human clicking
+# anything. This is what makes onboard-backlog/track-finding's `auto_continue`
+# input actually deliver, rather than being a flag nothing reads.
+#
+# Cannot be a step inside sonar-pr-scan.yml itself: that workflow is
+# `pull_request`-triggered and its run is what just finished — `workflow_run`
+# is the idiomatic way to react to a DIFFERENT, already-triggered workflow's
+# completion rather than polling for it.
+#
+# Fires on EVERY completed scan, including PRs this pipeline never touched —
+# safe by construction: a PR with no plan item (never ticketed through this
+# pipeline) simply has nothing to find below, and nothing is dispatched.
+name: auto-continue watch
+
+on:
+  workflow_run:
+    workflows: ["02 - scan, gate & settle"]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: automation-state
+  cancel-in-progress: false
+
+env:
+  AUTOMATION_REPO: phix/sonar-remediation-automation
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    # A red gate still needs to be checked — that is precisely the case
+    # remediation exists to react to. Only `cancelled` means nothing
+    # meaningful ran downstream (gate/settle never reached a real verdict).
+    if: github.event.workflow_run.conclusion != 'cancelled'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check out the automation repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.AUTOMATION_REPO }}
+          path: .automation
+
+      - name: Install
+        run: npm ci --prefix .automation
+
+      - id: pr-number
+        name: Which PR did this run scan?
+        env:
+          PULL_REQUESTS_JSON: ${{ toJson(github.event.workflow_run.pull_requests) }}
+        run: |
+          pr=$(node -e "console.log((JSON.parse(process.env.PULL_REQUESTS_JSON)[0] || {}).number || '')")
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+          [ -n "$pr" ] && echo "scanned PR #$pr" || echo "this run named no associated PR"
+
+      - uses: ./.github/actions/state-checkout
+        if: steps.pr-number.outputs.pr != ''
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - id: check
+        name: Was this group ticketed with auto-continue?
+        if: steps.pr-number.outputs.pr != ''
+        run: |
+          node .automation/jira/resume.mjs --plan .state/plan.json --pr "${{ steps.pr-number.outputs.pr }}" --json resume.json
+          auto=$(node -e "const r=require('./resume.json'); console.log(r.found && r.item.auto_continue ? 'true' : 'false')")
+          echo "auto_continue=$auto" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch remediation
+        if: steps.check.outputs.auto_continue == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SANDBOX_REPO_TOKEN }}
+        run: |
+          gh workflow run remediate.yml --repo "$GITHUB_REPOSITORY" \
+            -f pr="${{ steps.pr-number.outputs.pr }}" -f jira=true
+          echo "dispatched remediate.yml for PR #${{ steps.pr-number.outputs.pr }}"
