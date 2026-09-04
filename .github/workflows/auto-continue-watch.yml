@@ -18,6 +18,15 @@ on:
   workflow_run:
     workflows: ["02 - scan, gate & settle"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: >-
+          PR number to check for auto-continue. Only used on a manual run — a
+          workflow_run trigger reads the PR straight off the scan it just
+          watched.
+        required: true
+        type: string
 
 permissions:
   actions: write
@@ -57,8 +66,13 @@ jobs:
         name: Which PR did this run scan?
         env:
           PULL_REQUESTS_JSON: ${{ toJson(github.event.workflow_run.pull_requests) }}
+          MANUAL_PR: ${{ inputs.pr }}
         run: |
-          pr=$(node -e "console.log((JSON.parse(process.env.PULL_REQUESTS_JSON)[0] || {}).number || '')")
+          if [ -n "$MANUAL_PR" ]; then
+            pr="$MANUAL_PR"
+          else
+            pr=$(node -e "console.log((JSON.parse(process.env.PULL_REQUESTS_JSON)[0] || {}).number || '')")
+          fi
           echo "pr=$pr" >> "$GITHUB_OUTPUT"
           [ -n "$pr" ] && echo "scanned PR #$pr" || echo "this run named no associated PR"
 

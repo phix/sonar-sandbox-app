@@ -21,6 +21,15 @@ name: 02 - scan, gate & settle
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: >-
+          PR number to scan manually. Ignored on a real pull_request trigger —
+          this only feeds the resolve job when there is no pull_request event
+          to read from.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -29,12 +38,59 @@ permissions:
 # A remediation push re-triggers this workflow while the previous run may still
 # be polling. Superseding is correct here: only the newest head matters.
 concurrency:
-  group: sonar-pr-scan-${{ github.event.pull_request.number }}
+  group: sonar-pr-scan-${{ github.event.pull_request.number || inputs.pr }}
   cancel-in-progress: true
 
 jobs:
+  # Normalizes "which PR, on what branches" for both triggers this workflow
+  # accepts. On pull_request, github.event.pull_request already has every
+  # field; on workflow_dispatch there is no PR event payload at all, so this
+  # fetches the same fields by number instead. Keeping this as one job (rather
+  # than inlining a fallback in every step below) means the pull_request path
+  # is byte-for-byte what it was before manual dispatch existed.
+  resolve:
+    name: resolve pr context
+    runs-on: ubuntu-latest
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      head_ref: ${{ steps.pr.outputs.head_ref }}
+      base_ref: ${{ steps.pr.outputs.base_ref }}
+      head_repo: ${{ steps.pr.outputs.head_repo }}
+      html_url: ${{ steps.pr.outputs.html_url }}
+      node_id: ${{ steps.pr.outputs.node_id }}
+    steps:
+      - id: pr
+        name: Resolve PR context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          EVENT_HTML_URL: ${{ github.event.pull_request.html_url }}
+          EVENT_NODE_ID: ${{ github.event.pull_request.node_id }}
+          MANUAL_PR: ${{ inputs.pr }}
+        run: |
+          if [ -n "$EVENT_PR_NUMBER" ]; then
+            echo "number=$EVENT_PR_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "head_ref=$EVENT_HEAD_REF" >> "$GITHUB_OUTPUT"
+            echo "base_ref=$EVENT_BASE_REF" >> "$GITHUB_OUTPUT"
+            echo "head_repo=$EVENT_HEAD_REPO" >> "$GITHUB_OUTPUT"
+            echo "html_url=$EVENT_HTML_URL" >> "$GITHUB_OUTPUT"
+            echo "node_id=$EVENT_NODE_ID" >> "$GITHUB_OUTPUT"
+          else
+            gh api "repos/${{ github.repository }}/pulls/$MANUAL_PR" > pr.json
+            echo "number=$(jq -r .number pr.json)" >> "$GITHUB_OUTPUT"
+            echo "head_ref=$(jq -r .head.ref pr.json)" >> "$GITHUB_OUTPUT"
+            echo "base_ref=$(jq -r .base.ref pr.json)" >> "$GITHUB_OUTPUT"
+            echo "head_repo=$(jq -r .head.repo.full_name pr.json)" >> "$GITHUB_OUTPUT"
+            echo "html_url=$(jq -r .html_url pr.json)" >> "$GITHUB_OUTPUT"
+            echo "node_id=$(jq -r .node_id pr.json)" >> "$GITHUB_OUTPUT"
+          fi
+
   gate:
     name: gate
+    needs: resolve
     runs-on: ubuntu-latest
     # The light container shape from docs/decisions/ci-container.md. The scan
     # needs no JRE of its own: sonarqube-scan-action downloads a Scanner CLI
@@ -44,7 +100,7 @@ jobs:
     steps:
       # FIRST, before any checkout or secret use. A fork PR must end red.
       - name: Refuse fork pull requests
-        if: github.event.pull_request.head.repo.full_name != github.repository
+        if: needs.resolve.outputs.head_repo != github.repository
         run: |
           echo "::error title=Fork pull requests are out of scope::GitHub does not pass repository secrets to a pull_request run from a fork, so SONAR_TOKEN is absent and the scan cannot run. This check fails deliberately rather than reporting a green gate it never earned."
           exit 1
@@ -83,9 +139,9 @@ jobs:
           SONAR_HOST_URL: https://sonarcloud.io
         with:
           args: >
-            -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
-            -Dsonar.pullrequest.branch=${{ github.event.pull_request.head.ref }}
-            -Dsonar.pullrequest.base=${{ github.event.pull_request.base.ref }}
+            -Dsonar.pullrequest.key=${{ needs.resolve.outputs.number }}
+            -Dsonar.pullrequest.branch=${{ needs.resolve.outputs.head_ref }}
+            -Dsonar.pullrequest.base=${{ needs.resolve.outputs.base_ref }}
 
       # continue-on-error so a red gate still gets its comment posted below.
       # The verdict is re-asserted in the final step.
@@ -94,11 +150,13 @@ jobs:
         continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: node .github/scripts/pr-gate.mjs .scannerwork/report-task.txt "${{ github.event.pull_request.number }}"
+        run: node .github/scripts/pr-gate.mjs .scannerwork/report-task.txt "${{ needs.resolve.outputs.number }}"
 
       - name: Comment on the pull request
         if: always() && steps.gate.outcome != 'skipped'
         uses: actions/github-script@v8
+        env:
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
         with:
           script: |
             const fs = require('fs');
@@ -109,7 +167,7 @@ jobs:
             const body = fs.readFileSync('pr-comment.md', 'utf8');
             const marker = '<!-- sonar-pr-gate -->';
             const { owner, repo } = context.repo;
-            const issue_number = context.payload.pull_request.number;
+            const issue_number = Number(process.env.PR_NUMBER);
             const existing = await github.paginate(
               github.rest.issues.listComments, { owner, repo, issue_number }
             );
@@ -147,8 +205,8 @@ jobs:
   # logic a PR-triggered scan runs here, instead of a second implementation.
   settle:
     name: settle
-    needs: gate
-    if: always() && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [resolve, gate]
+    if: always() && needs.resolve.outputs.head_repo == github.repository
     # A called reusable workflow's permissions are capped by the caller's —
     # the top-level `permissions:` above is read-only for contents, but
     # _settle-notify.yml pushes to automation-state and comments on the PR.
@@ -158,7 +216,7 @@ jobs:
     uses: ./.github/workflows/_settle-notify.yml
     with:
       sonar_project_key: phix_sonar-sandbox-app
-      pr: ${{ github.event.pull_request.number }}
-      pr_url: ${{ github.event.pull_request.html_url }}
-      pr_node_id: ${{ github.event.pull_request.node_id }}
+      pr: ${{ needs.resolve.outputs.number }}
+      pr_url: ${{ needs.resolve.outputs.html_url }}
+      pr_node_id: ${{ needs.resolve.outputs.node_id }}
     secrets: inherit
