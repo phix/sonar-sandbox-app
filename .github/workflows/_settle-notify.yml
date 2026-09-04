@@ -1,3 +1,6 @@
+# REUSABLE MODULE — called by 02's settle job, not meant to be run directly.
+# See .github/workflows/README.md.
+#
 # Module: read the gate, decide ready/red, optionally auto-merge, tell
 # Telegram, and — new — tell the ticket what happened. Extracted from
 # sonar-pr-scan.yml's `settle` job so onboard-backlog/track-finding's

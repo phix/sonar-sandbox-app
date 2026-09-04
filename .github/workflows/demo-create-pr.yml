@@ -1,3 +1,6 @@
+# PATH 1 (demo walkthrough), step 1 of 3 — run this manually to start.
+# See .github/workflows/README.md for the full "which workflow do I run" map.
+#
 # Create the standing demo PR: a deliberately defective "order reporting,
 # stats & session auth" feature diff on demo/planted-smells, carrying the
 # planted findings of the smell catalogue for the remediation pipeline to work

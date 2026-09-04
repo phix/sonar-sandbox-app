@@ -1,3 +1,7 @@
+# PATH 2 glue — fires automatically after every "02" run. Not something you
+# run by hand for the normal flow (a `pr` input exists for a manual check
+# against one PR). See .github/workflows/README.md.
+#
 # Fires on every completion of "02 - scan, gate & settle" and checks whether
 # the PR it just scanned belongs to a group that was ticketed/branched/PR'd
 # with auto_continue — if so, dispatches remediation without a human clicking

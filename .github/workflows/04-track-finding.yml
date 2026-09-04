@@ -1,3 +1,6 @@
+# PATH 2 (finding-driven / Jira-tracked) — single-finding entry point. Run
+# this manually. See .github/workflows/README.md.
+#
 # Entry point: one specific finding-group, at whatever stage it already
 # stands. Covers BOTH "I saw this on the Sonar dashboard, nothing exists for
 # it yet" and "I already filed a Jira ticket for this by hand" — they are the
