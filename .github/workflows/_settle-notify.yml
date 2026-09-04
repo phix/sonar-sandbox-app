@@ -33,6 +33,21 @@ on:
         value: ${{ jobs.settle.outputs.state }}
       reason:
         value: ${{ jobs.settle.outputs.reason }}
+  workflow_dispatch:
+    inputs:
+      sonar_project_key:
+        required: true
+        type: string
+      pr:
+        required: true
+        type: string
+      pr_url:
+        required: true
+        type: string
+      pr_node_id:
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write

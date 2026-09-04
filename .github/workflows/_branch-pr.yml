@@ -46,6 +46,37 @@ on:
         value: ${{ jobs.branch-pr.outputs.pr_number }}
       branch_name:
         value: ${{ jobs.branch-pr.outputs.branch_name }}
+  workflow_dispatch:
+    inputs:
+      fingerprint:
+        required: true
+        type: string
+      rule:
+        required: true
+        type: string
+      module:
+        required: true
+        type: string
+      severity:
+        required: true
+        type: string
+      finding_count:
+        required: true
+        type: string
+      jira_issue_key:
+        required: true
+        type: string
+      sonar_project_key:
+        required: true
+        type: string
+      base_branch:
+        required: false
+        type: string
+        default: main
+      auto_continue:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
