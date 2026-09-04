@@ -96,7 +96,18 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           args=""
-          [ -n "${{ inputs.pr_url }}" ] && args="--pr-url ${{ inputs.pr_url }}"
+          [ -n "${{ inputs.pr_url }}" ] && args="$args --pr-url ${{ inputs.pr_url }}"
+          # `scope` reaches fetch-findings.mjs verbatim (a "branch:x" scope or
+          # a bare PR number) but jira/run.mjs also needs to know which one it
+          # was: a PR-scoped fetch must never feed the resolved-pass — see
+          # jira/run.mjs's own comment on why (a PR-scoped listing cannot tell
+          # "untouched" from "fixed"). This is the same false positive #24
+          # fixed inside jira/run.mjs; it recurred here because this call
+          # never told run.mjs the fetch WAS PR-scoped in the first place.
+          case "${{ inputs.scope }}" in
+            branch:*) ;;
+            *) args="$args --pr ${{ inputs.scope }}" ;;
+          esac
           node .automation/jira/run.mjs findings.json --enabled \
             --plan .state/plan.json $args --json jira-run.json
 
