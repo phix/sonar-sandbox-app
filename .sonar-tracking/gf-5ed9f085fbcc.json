@@ -1,0 +1,19 @@
+{
+  "fingerprint": "gf-5ed9f085fbcc",
+  "rule": "css:S4667",
+  "module": "web",
+  "severity": "MAJOR",
+  "jira_issue_key": "SONAR-3",
+  "sonar_project_key": "phix_sonar-sandbox-app",
+  "opened_at": "2026-09-04T11:31:07.248Z",
+  "findings": [
+    {
+      "key": "AaBPgi7EREXdXm6pmYiE",
+      "rule": "css:S4667",
+      "file": "web/src/app/app.css",
+      "line": 1,
+      "severity": "MAJOR",
+      "message": "Empty source"
+    }
+  ]
+}
