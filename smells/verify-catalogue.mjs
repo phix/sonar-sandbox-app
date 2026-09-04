@@ -1,12 +1,21 @@
-// Check the planted smells still match the catalogue.
-//
-// The first-scan gate does not accept "the scan completed" as success — it
-// diffs reported rule keys against the planted catalogue, and a planted smell
-// that never fires is treated as a real defect in the oracle. This is that
-// same diff, run locally against the analyzer so a drift is caught before a
-// scan is spent on it.
+// Fast local pre-flight. NOT the oracle.
 //
 //   npm run smells:verify
+//
+// The oracle is a real SonarQube scan, diffed by assert-catalogue-coverage.mjs
+// in the automation repo. This runs the same SonarJS analyzer as ESLint rules
+// so a drifted smell is caught in seconds instead of after a scan — but it can
+// only see the rules the standalone plugin implements, and it has been proven
+// to disagree with Sonar in BOTH directions:
+//
+//   typescript:S6606   local reported 2, Sonar reported 0
+//   javascript:S6582   local reported 0, Sonar reported 3
+//   javascript:S7737   local reported 0, Sonar reported 1
+//   javascript:S7765   local reported 0, Sonar reported 1
+//
+// So it checks only the catalogue entries whose rule it can actually see, and
+// says out loud how many it skipped. A pre-flight that quietly ignores most of
+// the catalogue while printing PASS would be worse than no pre-flight at all.
 import { ESLint } from 'eslint';
 import { readFileSync } from 'node:fs';
 import config, { RULE_MAP } from '../eslint.smells.config.mjs';
@@ -15,12 +24,12 @@ const LOCAL_TO_SONAR = { js: {}, ts: {} };
 for (const [sonarKey, localRule] of Object.entries(RULE_MAP)) {
   LOCAL_TO_SONAR[sonarKey.startsWith('javascript:') ? 'js' : 'ts'][localRule] = sonarKey;
 }
+const COVERED = new Set(Object.keys(RULE_MAP));
 
 const catalogue = JSON.parse(readFileSync('smells/catalogue.json', 'utf8'));
 const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: config });
 const results = await eslint.lintFiles(['api/src', 'web/src']);
 
-// Compare on (file, line, rule) — the same identity the catalogue records.
 const key = (f, l, r) => `${f}:${l}:${r}`;
 const observed = new Map();
 for (const result of results) {
@@ -28,32 +37,24 @@ for (const result of results) {
   const lang = file.startsWith('api/') ? 'js' : 'ts';
   for (const m of result.messages) {
     const sonarKey = LOCAL_TO_SONAR[lang][m.ruleId];
-    if (!sonarKey) {
-      console.error(`unmapped local rule ${m.ruleId} at ${file}:${m.line}`);
-      process.exitCode = 1;
-      continue;
-    }
-    observed.set(key(file, m.line, sonarKey), { file, line: m.line, rule: sonarKey });
+    if (sonarKey) observed.set(key(file, m.line, sonarKey), { file, line: m.line, rule: sonarKey });
   }
 }
 
-const expected = new Map(
-  catalogue.smells.map((s) => [key(s.file, s.line_hint, s.sonar_rule_key), s])
-);
+const checkable = catalogue.smells.filter((s) => COVERED.has(s.sonar_rule_key));
+const skipped = catalogue.smells.length - checkable.length;
+const expected = new Map(checkable.map((s) => [key(s.file, s.line_hint, s.sonar_rule_key), s]));
 
-const missing = [...expected.entries()].filter(([k]) => !observed.has(k)).map(([, s]) => s);
-const unexpected = [...observed.entries()].filter(([k]) => !expected.has(k)).map(([, o]) => o);
+const missing = [...expected].filter(([k]) => !observed.has(k)).map(([, s]) => s);
+const unexpected = [...observed].filter(([k]) => !expected.has(k)).map(([, o]) => o);
 
-for (const s of missing) {
-  console.error(`MISSING     ${s.id} ${s.sonar_rule_key} expected at ${s.file}:${s.line_hint}`);
-}
-for (const o of unexpected) {
-  console.error(`UNEXPECTED  ${o.rule} at ${o.file}:${o.line} is not in the catalogue`);
-}
+for (const s of missing) console.error(`MISSING     ${s.id} ${s.sonar_rule_key} expected at ${s.file}:${s.line_hint}`);
+for (const o of unexpected) console.error(`UNEXPECTED  ${o.rule} at ${o.file}:${o.line} is not in the catalogue`);
 
-const ok = missing.length === 0 && unexpected.length === 0;
+const ok = !missing.length && !unexpected.length;
 console.log(
-  `${ok ? 'PASS' : 'FAIL'}  ${observed.size} finding(s) observed, ${expected.size} catalogued, ` +
-    `${missing.length} missing, ${unexpected.length} unexpected`
+  `${ok ? 'PASS' : 'FAIL'}  ${checkable.length}/${catalogue.smells.length} catalogue entries checkable locally ` +
+    `(${skipped} skipped: rule not implemented by the local plugin), ${missing.length} missing, ${unexpected.length} unexpected`
 );
+console.log('This is a pre-flight. The authoritative gate is a real Sonar scan.');
 if (!ok) process.exitCode = 1;
