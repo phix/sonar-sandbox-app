@@ -1,3 +1,7 @@
+# SHARED ENGINE — step 2 of path 1 (demo walkthrough), and the fix step both
+# paths rely on. Run manually with a `pr` number, or let auto-continue-watch.yml
+# dispatch it for you. See .github/workflows/README.md.
+#
 # The middle of the loop: fix every eligible finding on the PR branch, write one
 # test per fix, build, test, and push back onto the branch.
 #

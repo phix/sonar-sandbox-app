@@ -1,3 +1,7 @@
+# SHARED ENGINE — fires automatically on every pull request; used by both
+# path 1 (demo walkthrough) and path 2 (finding-driven/Jira-tracked). You do
+# not normally run this by hand. See .github/workflows/README.md.
+#
 # Scan every pull request, and let the Sonar quality gate decide whether it can
 # merge.
 #

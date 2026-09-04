@@ -1,3 +1,6 @@
+# REUSABLE MODULE — called by 03 and 04, not meant to be run directly. See
+# .github/workflows/README.md.
+#
 # Module: create (or find) the branch and PR for ONE group. Called once per
 # group — by onboard-backlog as a matrix, by track-finding for a single one —
 # never for the "PR already exists" entry point, where there is nothing to

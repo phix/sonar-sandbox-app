@@ -1,3 +1,6 @@
+# REUSABLE MODULE — called by 03 and 04, not meant to be run directly. See
+# .github/workflows/README.md.
+#
 # Module: file (or find) a Jira ticket for every group in scope, BEFORE any
 # branch or PR exists for it. This is the piece that was missing before —
 # ticketing used to run only inside remediate.yml, after code had already

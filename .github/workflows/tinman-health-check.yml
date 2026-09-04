@@ -1,3 +1,6 @@
+# UTILITY — unrelated to either path, run any time. See
+# .github/workflows/README.md.
+#
 # A liveness probe for tinman's LLM endpoint, isolated from everything else.
 #
 # `remediate.yml` already proves tinman is reachable, but only as step 9 of a

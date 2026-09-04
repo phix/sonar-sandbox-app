@@ -25,6 +25,14 @@ SonarQube Cloud scan
 
 "Pristine" here means *pristine as a test fixture*, not *clean code*. It is the restore point the one-click reset returns to, so that a fixed smell can be un-fixed and the pipeline re-run from a known state. Do not read the tag name as an invitation to branch from it expecting good code.
 
+## Running the pipeline
+
+Two independent ways to feed it, plus a shared scan/fix engine both rely on:
+a **demo walkthrough** against this repo's own planted smells, or a
+**finding-driven, Jira-tracked** run against a real backlog. See
+[`.github/workflows/README.md`](.github/workflows/README.md) for which
+workflow to run and when.
+
 ## Layout
 
 ```

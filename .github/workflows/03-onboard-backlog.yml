@@ -1,3 +1,6 @@
+# PATH 2 (finding-driven / Jira-tracked) — bulk entry point. Run this
+# manually. See .github/workflows/README.md.
+#
 # Entry point: a project just adopted this pipeline and has a backlog of
 # findings, none of them ticketed, branched or PR'd yet. Files a ticket per
 # group (throttled to max_concurrent — see jira/queue.mjs in the automation

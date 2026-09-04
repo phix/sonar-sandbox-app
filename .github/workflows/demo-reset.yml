@@ -1,3 +1,6 @@
+# PATH 1 (demo walkthrough), step 3 of 3 — run this manually to restart the
+# walkthrough. See .github/workflows/README.md.
+#
 # Put the sandbox back to the state a demo starts from.
 #
 # Force-pushes demo/planted-smells to v0-pristine, which restores all 32
