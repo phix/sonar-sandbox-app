@@ -44,6 +44,7 @@ jobs:
           if [ -n "$num" ]; then
             echo "::notice::PR #$num is already open. Use demo-reset to restore its branch — recreating would renumber it."
             echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "number=$num" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -64,6 +65,7 @@ jobs:
           echo "$DIRTY_BRANCH -> $dirty"
 
       - name: Open the PR
+        id: open
         if: steps.existing.outputs.skip == 'false'
         env:
           # Not github.token: a PR opened by GITHUB_TOKEN would not fire the
@@ -74,5 +76,36 @@ jobs:
             --base main --head "$DIRTY_BRANCH" \
             --title "demo: planted-smells remediation target — order reporting, stats & session auth (do not merge)" \
             --body-file .github/demo-pr-body.md
-          gh pr list --repo "$GITHUB_REPOSITORY" --head "$DIRTY_BRANCH" --state open \
-            --json number --jq '"opened PR #\(.[0].number)"'
+          num="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$DIRTY_BRANCH" --state open --json number --jq '.[0].number')"
+          echo "opened PR #$num"
+          echo "number=$num" >> "$GITHUB_OUTPUT"
+
+      # No native "continue to the next workflow" button exists in the Actions
+      # UI, and GitHub does not support pre-filling a workflow_dispatch form
+      # via URL (github.com/orgs/community/discussions/51159, still open).
+      # This is the closest real substitute: the PR-open above already fired
+      # "02 - scan, gate & settle" automatically (that's why this job uses
+      # SANDBOX_REPO_TOKEN, not the default token — see the comment on that
+      # step), so there is nothing to manually continue for the normal demo
+      # flow. This summary just makes that visible without leaving the run
+      # page, and puts the PR number somewhere copy-pasteable for the rare
+      # case of a manual re-run of 02 or 05 against it.
+      - name: Summarize
+        if: always() && steps.existing.outcome == 'success'
+        env:
+          PR_NUMBER: ${{ steps.existing.outputs.number || steps.open.outputs.number }}
+        run: |
+          {
+            echo "### Demo PR #$PR_NUMBER"
+            echo
+            echo "[View the PR](https://github.com/$GITHUB_REPOSITORY/pull/$PR_NUMBER)"
+            echo
+            echo "**02 - scan, gate & settle already started automatically** — opening this PR fires its \`pull_request\` trigger, no manual step needed."
+            echo "[Watch it run](https://github.com/$GITHUB_REPOSITORY/actions/workflows/sonar-pr-scan.yml?query=branch%3A$DIRTY_BRANCH)"
+            echo
+            echo "PR number for a manual re-run of 02 or 05, if you ever need one (GitHub can't pre-fill the input box for you):"
+            echo
+            echo "\`\`\`"
+            echo "$PR_NUMBER"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
