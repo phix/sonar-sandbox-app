@@ -218,10 +218,29 @@ jobs:
           npm ci
           npm ci --prefix .automation
 
+      # Confirmed live 2026-09-04 (docs/decisions/multi-entry-point-flow.md):
+      # a PR-scoped Sonar query returns NOTHING for a file the PR's own diff
+      # has not touched yet — indistinguishable, from the query alone, from
+      # a genuinely fixed one. A freshly-opened pipeline-created group-PR is
+      # exactly that case, and codemods/remediate.mjs was silently handed
+      # zero findings and fixed nothing, on every step green.
+      #
+      # _branch-pr.yml commits `.sonar-tracking/<fingerprint>.json` with the
+      # group's actual findings when it opens the branch, precisely so this
+      # step has a source that does not depend on the diff already existing.
+      # Prefer it when present. It is removed in the same commit as a real
+      # fix attempt below, so a SECOND run on the same branch finds no
+      # ledger file and correctly falls back to a live PR-scoped fetch —
+      # right at that point, since the file is now actually part of the diff.
       - name: Fetch the PR findings from Sonar
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: node .automation/codemods/fetch-findings.mjs "$SONAR_PROJECT_KEY" "${{ needs.resolve-pr.outputs.number }}" findings.json
+        run: |
+          if node .automation/codemods/tracked-findings.mjs findings.json; then
+            echo "used the tracking ledger — this branch has not touched its flagged file(s) yet"
+          else
+            node .automation/codemods/fetch-findings.mjs "$SONAR_PROJECT_KEY" "${{ needs.resolve-pr.outputs.number }}" findings.json
+          fi
 
       - name: Remediate
         id: remediate
@@ -375,7 +394,25 @@ jobs:
         id: push
         if: ${{ !inputs.dry_run }}
         run: |
-          if git diff --quiet && git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
+          # Every one of these is scratch this job itself writes into the
+          # checkout root (findings.json by the fetch step above, the rest
+          # by codemods/remediate.mjs and the agentic run) — never meant to
+          # reach the branch. Confirmed live 2026-09-04
+          # (docs/decisions/multi-entry-point-flow.md): with the fix above
+          # this list is what stops a genuinely no-op remediation (nothing
+          # to fix, so none of these differ from a real fix's output) from
+          # being reported as "nothing to commit" and then committing them
+          # anyway — the untracked scratch was ALWAYS enough to make
+          # `git status --porcelain` non-empty, so this guard could not
+          # actually fire until it excluded them by name.
+          SCRATCH=(findings.json ratio.json dispositions.json agentic.json
+                    remediation-comment.md agentic-comment.md)
+          EXCLUDE=()
+          for f in "${SCRATCH[@]}"; do EXCLUDE+=(":(exclude)$f"); done
+
+          if git diff --quiet -- . "${EXCLUDE[@]}" \
+             && git diff --cached --quiet -- . "${EXCLUDE[@]}" \
+             && [ -z "$(git status --porcelain -- . "${EXCLUDE[@]}")" ]; then
             echo "nothing to commit"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
           git config user.name  'sonar-remediation-bot'
@@ -385,14 +422,14 @@ jobs:
           # here, in the SAME commit as the real fix, rather than waiting for
           # the settle stage to confirm the fix worked — waiting would need
           # an extra bot push just to delete one file, re-triggering a whole
-          # scan cycle for a purely cosmetic cleanup. A no-op run (nothing
-          # above changed anything) never reaches this line, so an attempt
-          # that fixed nothing correctly leaves the ledger entry open.
+          # scan cycle for a purely cosmetic cleanup. A no-op run never
+          # reaches this line (the guard above just returned), so an
+          # attempt that fixed nothing correctly leaves the ledger open.
           # Harmless when this PR was not pipeline-created (the demo PR,
           # remediate-pr's batch case): the glob matches nothing and `-f`
           # is silent about that.
           rm -f .sonar-tracking/*.json
-          git add -A
+          git add -A -- . "${EXCLUDE[@]}"
           # Two provenances, counted separately. Sweeping model-authored edits
           # into a commit whose subject says "deterministically" would put a
           # false claim in the permanent history -- and provenance is exactly

@@ -119,6 +119,13 @@ jobs:
             git checkout -q -b "$name"
             mkdir -p .sonar-tracking
             node -e "
+              // The FULL finding shape (key, rule, file, line, severity,
+              // message, hash) — not a stripped display-only subset. This
+              // file is not just an audit trail: remediate.yml reads it
+              // straight back as findings.json for codemods/remediate.mjs
+              // when the branch has not yet touched the flagged file, since
+              // a PR-scoped Sonar fetch cannot see a pre-existing finding on
+              // an untouched file (docs/decisions/multi-entry-point-flow.md).
               const findings = require('./tracking-findings.json');
               const ledger = {
                 fingerprint: '${{ inputs.fingerprint }}',
@@ -128,7 +135,7 @@ jobs:
                 jira_issue_key: '${{ inputs.jira_issue_key }}',
                 sonar_project_key: '${{ inputs.sonar_project_key }}',
                 opened_at: new Date().toISOString(),
-                findings: findings.map((f) => ({ rule: f.rule, file: f.file, line: f.line, message: f.message }))
+                findings
               };
               require('fs').writeFileSync('.sonar-tracking/${{ inputs.fingerprint }}.json', JSON.stringify(ledger, null, 2) + '\n');
             "
