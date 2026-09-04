@@ -36,6 +36,25 @@ on:
       groups_json:
         description: JSON array of {fingerprint, rule, module, severity, findingCount, jira_issue_key} for every group in scope, ticket included
         value: ${{ jobs.file-ticket.outputs.groups_json }}
+  workflow_dispatch:
+    inputs:
+      sonar_project_key:
+        required: true
+        type: string
+      scope:
+        description: Passed straight to fetch-findings.mjs — "branch:main" or a PR number
+        required: true
+        type: string
+      fingerprints:
+        description: Comma-separated group fingerprints to restrict ticketing to. Empty = every group in scope.
+        required: false
+        type: string
+        default: ''
+      pr_url:
+        description: Set only when a PR already exists for this scope
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
