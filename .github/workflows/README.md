@@ -66,3 +66,4 @@ to supply it for you — there's no reason to.
 | Workflow | Role |
 |---|---|
 | [`99 - tinman health check`](tinman-health-check.yml) | Standalone liveness probe for tinman's LLM endpoint. Run any time you want to confirm connectivity — no open PR or findings required. |
+| [`98 - pipeline diagram`](98-pipeline-diagram.yml) | Draws everything on this page from the workflow files themselves and publishes it at <https://phix.github.io/sonar-sandbox-app/>. Fires on its own when a workflow changes; on a PR it comments the topology delta. See [`tools/pipeline-diagram/`](../../tools/pipeline-diagram/README.md). |

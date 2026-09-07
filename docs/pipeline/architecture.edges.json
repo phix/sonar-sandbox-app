@@ -1,0 +1,41 @@
+{
+  "edges": {
+    "onboard-backlog->file-ticket": ".github/workflows/03-onboard-backlog.yml:87",
+    "onboard-backlog->branch-pr": ".github/workflows/03-onboard-backlog.yml:100",
+    "branch-pr->sonar-remediation-automation": ".github/workflows/_branch-pr.yml:111",
+    "branch-pr->state": ".github/workflows/_branch-pr.yml:214",
+    "branch-pr->sonarcloud": ".github/workflows/_branch-pr.yml:131",
+    "file-ticket->sonar-remediation-automation": ".github/workflows/_file-ticket.yml:89",
+    "file-ticket->state": ".github/workflows/_file-ticket.yml:109",
+    "file-ticket->sonarcloud": ".github/workflows/_file-ticket.yml:100",
+    "file-ticket->jira": ".github/workflows/_file-ticket.yml:116",
+    "settle-notify->sonar-remediation-automation": ".github/workflows/_settle-notify.yml:80",
+    "settle-notify->state": ".github/workflows/_settle-notify.yml:173",
+    "settle-notify->sonarcloud": ".github/workflows/_settle-notify.yml:116",
+    "settle-notify->jira": ".github/workflows/_settle-notify.yml:204",
+    "settle-notify->telegram": ".github/workflows/_settle-notify.yml:144",
+    "sonar-pr-scan->auto-continue-watch": ".github/workflows/auto-continue-watch.yml:23",
+    "auto-continue-watch->sonar-remediation-automation": ".github/workflows/auto-continue-watch.yml:60",
+    "auto-continue-watch->state": ".github/workflows/auto-continue-watch.yml:83",
+    "auto-continue-watch->remediate": ".github/workflows/auto-continue-watch.yml:96",
+    "demo-create-pr->sonar-pr-scan": ".github/workflows/demo-create-pr.yml:70",
+    "remediate->file-ticket": ".github/workflows/remediate.yml:132",
+    "remediate->tailscale": ".github/workflows/remediate.yml:259",
+    "sonar-pr-scan->settle-notify": ".github/workflows/sonar-pr-scan.yml:220",
+    "tinman-health-check->sonar-remediation-automation": ".github/workflows/tinman-health-check.yml:39",
+    "tinman-health-check->tailscale": ".github/workflows/tinman-health-check.yml:45",
+    "remediate->sonar-remediation-automation": "manual.json",
+    "remediate->sonar-pr-scan": "manual.json",
+    "demo-reset->sonar-pr-scan": "manual.json",
+    "sonar-pr-scan->app": "manual.json",
+    "tailscale->tinman": "manual.json"
+  },
+  "folded": {
+    "sonar-pr-scan->sonarcloud": "drawn from settle-notify",
+    "remediate->sonarcloud": "drawn from file-ticket",
+    "remediate->sonar-remediation-automation": "drawn from file-ticket",
+    "onboard-backlog->sonarcloud": "drawn from file-ticket",
+    "onboard-backlog->state": "drawn from file-ticket",
+    "onboard-backlog->sonar-remediation-automation": "drawn from file-ticket"
+  }
+}

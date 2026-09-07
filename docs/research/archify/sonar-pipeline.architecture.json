@@ -1,0 +1,474 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Sonar remediation pipeline",
+    "subtitle": "Repos, external services, and the secrets that join them \u2014 pinned to .github/workflows at 82a73a3",
+    "output": "sonar-pipeline.html",
+    "visual_preset": "blueprint",
+    "repository": {
+      "url": "https://github.com/phix/sonar-sandbox-app",
+      "revision": "82a73a31bf9892f21efd6fa71691410575be5fcf"
+    }
+  },
+  "components": [
+    {
+      "id": "nick",
+      "type": "external",
+      "label": "Nick",
+      "sublabel": "runs 01 / 03 / 04 / 05 / 06",
+      "pos": [
+        40,
+        250
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "wf-demo",
+      "type": "frontend",
+      "label": "01 \u00b7 demo-create-pr",
+      "sublabel": "opens standing demo PR",
+      "sources": [
+        {
+          "path": ".github/workflows/demo-create-pr.yml",
+          "line": 18,
+          "label": "workflow_dispatch"
+        }
+      ],
+      "pos": [
+        260,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "wf-scan",
+      "type": "backend",
+      "label": "02 \u00b7 scan & gate",
+      "sublabel": "required check `gate`",
+      "tag": "auto on PR",
+      "sources": [
+        {
+          "path": ".github/workflows/sonar-pr-scan.yml",
+          "line": 95,
+          "end_line": 220,
+          "label": "gate \u2192 settle"
+        }
+      ],
+      "pos": [
+        260,
+        250
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "wf-onboard",
+      "type": "frontend",
+      "label": "03/04 \u00b7 onboard/track",
+      "sublabel": "file ticket \u00b7 branch + PR",
+      "sources": [
+        {
+          "path": ".github/workflows/03-onboard-backlog.yml",
+          "line": 87,
+          "end_line": 100,
+          "label": "\u2192 _file-ticket, _branch-pr"
+        }
+      ],
+      "pos": [
+        260,
+        390
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "wf-remediate",
+      "type": "backend",
+      "label": "05 \u00b7 remediate a PR",
+      "sublabel": "fix, test, push back",
+      "sources": [
+        {
+          "path": ".github/workflows/remediate.yml",
+          "line": 250,
+          "end_line": 263,
+          "label": "remediate.mjs + tailnet"
+        }
+      ],
+      "pos": [
+        260,
+        530
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "watch",
+      "type": "messagebus",
+      "label": "auto-continue-watch",
+      "sublabel": "workflow_run glue",
+      "sources": [
+        {
+          "path": ".github/workflows/auto-continue-watch.yml",
+          "line": 22,
+          "label": "workflow_run: 02"
+        }
+      ],
+      "pos": [
+        520,
+        390
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "state",
+      "type": "database",
+      "label": "state branch",
+      "sublabel": "state-checkout / state-commit",
+      "sources": [
+        {
+          "path": ".github/actions/state-checkout/action.yml",
+          "line": 1
+        }
+      ],
+      "pos": [
+        520,
+        530
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "web + api",
+      "sublabel": "Angular 22 \u00b7 Express 5",
+      "sources": [
+        {
+          "path": "package.json",
+          "line": 6,
+          "end_line": 9,
+          "label": "npm workspaces"
+        }
+      ],
+      "pos": [
+        520,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "automation",
+      "type": "backend",
+      "label": "remediation-automation",
+      "sublabel": "codemods \u00b7 jira \u00b7 settle",
+      "tag": "checked out as .automation",
+      "sources": [
+        {
+          "path": ".github/workflows/_branch-pr.yml",
+          "line": 114,
+          "label": "actions/checkout repository:"
+        }
+      ],
+      "pos": [
+        780,
+        250
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "tailscale",
+      "type": "security",
+      "label": "Tailscale",
+      "sublabel": "ephemeral tag:ci node",
+      "sources": [
+        {
+          "path": ".github/workflows/remediate.yml",
+          "line": 259,
+          "end_line": 263,
+          "label": "tailscale/github-action"
+        }
+      ],
+      "pos": [
+        780,
+        530
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "sonar",
+      "type": "cloud",
+      "label": "SonarCloud",
+      "sublabel": "phix / phix_sonar-sandbox-app",
+      "sources": [
+        {
+          "path": ".github/workflows/sonar-pr-scan.yml",
+          "line": 140,
+          "end_line": 143,
+          "label": "sonarqube-scan-action"
+        }
+      ],
+      "pos": [
+        1060,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "jira",
+      "type": "cloud",
+      "label": "Jira",
+      "sublabel": "1337software \u00b7 project SONAR",
+      "sources": [
+        {
+          "path": ".github/workflows/_file-ticket.yml",
+          "line": 74,
+          "end_line": 75
+        }
+      ],
+      "pos": [
+        1060,
+        250
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "telegram",
+      "type": "cloud",
+      "label": "Telegram",
+      "sublabel": "optional bot notify",
+      "sources": [
+        {
+          "path": ".github/workflows/_settle-notify.yml",
+          "line": 139,
+          "end_line": 155
+        }
+      ],
+      "pos": [
+        1060,
+        390
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "tinman",
+      "type": "backend",
+      "label": "tinman",
+      "sublabel": "LLM endpoint \u00b7 192.168.1.217",
+      "sources": [
+        {
+          "path": ".github/workflows/tinman-health-check.yml",
+          "line": 42,
+          "end_line": 49
+        }
+      ],
+      "pos": [
+        1060,
+        530
+      ],
+      "size": [
+        180,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "phix/sonar-sandbox-app  (GitHub Actions)",
+      "wraps": [
+        "wf-demo",
+        "wf-scan",
+        "wf-onboard",
+        "wf-remediate",
+        "watch",
+        "state",
+        "app"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "tailnet (TS_OAUTH_* secrets)",
+      "wraps": [
+        "tailscale",
+        "tinman"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "nick",
+      "to": "wf-scan",
+      "variant": "dashed",
+      "label": "re-run"
+    },
+    {
+      "from": "nick",
+      "to": "wf-demo",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "from": "nick",
+      "to": "wf-onboard",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "from": "wf-demo",
+      "to": "wf-scan",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "opens PR",
+      "variant": "emphasis",
+      "labelAt": [
+        392,
+        188
+      ]
+    },
+    {
+      "from": "wf-scan",
+      "to": "watch",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "workflow_run"
+    },
+    {
+      "from": "watch",
+      "to": "wf-remediate",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "dispatch 05"
+    },
+    {
+      "from": "wf-remediate",
+      "to": "wf-scan",
+      "fromSide": "left",
+      "toSide": "left",
+      "label": "push fix \u2192 re-scan",
+      "variant": "emphasis",
+      "labelDx": -70
+    },
+    {
+      "from": "wf-scan",
+      "to": "app",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "variant": "dashed",
+      "label": "scans"
+    },
+    {
+      "from": "wf-onboard",
+      "to": "automation",
+      "fromSide": "right",
+      "toSide": "left",
+      "label": "_file-ticket \u00b7 _branch-pr",
+      "labelDy": -10
+    },
+    {
+      "from": "wf-remediate",
+      "to": "state",
+      "label": "attempt count",
+      "variant": "dashed"
+    },
+    {
+      "from": "wf-scan",
+      "to": "automation",
+      "label": "settle.mjs",
+      "variant": "emphasis"
+    },
+    {
+      "from": "state",
+      "to": "automation",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "label": "remediate.mjs",
+      "labelAt": [
+        724,
+        468
+      ]
+    },
+    {
+      "from": "wf-scan",
+      "to": "sonar",
+      "fromSide": "top",
+      "toSide": "left",
+      "label": "SONAR_TOKEN",
+      "variant": "security",
+      "labelAt": [
+        700,
+        106
+      ]
+    },
+    {
+      "from": "automation",
+      "to": "sonar",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "label": "fetch-findings"
+    },
+    {
+      "from": "automation",
+      "to": "jira",
+      "label": "JIRA_API_TOKEN",
+      "variant": "security"
+    },
+    {
+      "from": "automation",
+      "to": "telegram",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "variant": "dashed",
+      "label": "TELEGRAM_BOT_TOKEN"
+    },
+    {
+      "from": "wf-remediate",
+      "to": "tailscale",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "label": "join tailnet",
+      "variant": "security"
+    },
+    {
+      "from": "tailscale",
+      "to": "tinman",
+      "label": "100.x tailnet IP",
+      "variant": "emphasis"
+    }
+  ]
+}

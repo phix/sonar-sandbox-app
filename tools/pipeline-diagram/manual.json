@@ -1,0 +1,210 @@
+{
+  "meta": {
+    "title": "Sonar remediation pipeline",
+    "subtitle": "Generated from .github/workflows — every node and edge is pinned to the line it was read from",
+    "visual_preset": "blueprint",
+    "repository_url": "https://github.com/phix/sonar-sandbox-app"
+  },
+  "actions": {
+    "SonarSource/sonarqube-scan-action": {
+      "id": "sonarcloud",
+      "label": "sonarqube-scan-action",
+      "node": {
+        "type": "cloud",
+        "label": "SonarCloud",
+        "sublabel": "phix / phix_sonar-sandbox-app"
+      }
+    },
+    "tailscale/github-action": {
+      "id": "tailscale",
+      "label": "join tailnet",
+      "variant": "security",
+      "node": {
+        "type": "security",
+        "label": "Tailscale",
+        "sublabel": "ephemeral tag:ci node"
+      }
+    },
+    "./.github/actions/state-checkout": {
+      "id": "state",
+      "label": "state-checkout",
+      "variant": "dashed",
+      "node": {
+        "type": "database",
+        "label": "state branch",
+        "sublabel": "attempt counts, group state"
+      }
+    }
+  },
+  "secrets": {
+    "SONAR_TOKEN": {
+      "id": "sonarcloud",
+      "node": {
+        "type": "cloud",
+        "label": "SonarCloud",
+        "sublabel": "phix / phix_sonar-sandbox-app"
+      }
+    },
+    "JIRA_API_TOKEN": {
+      "id": "jira",
+      "node": {
+        "type": "cloud",
+        "label": "Jira",
+        "sublabel": "1337software · project SONAR"
+      }
+    },
+    "TELEGRAM_BOT_TOKEN": {
+      "id": "telegram",
+      "node": {
+        "type": "cloud",
+        "label": "Telegram",
+        "sublabel": "optional bot notify"
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "tinman",
+      "type": "backend",
+      "label": "tinman",
+      "sublabel": "LLM endpoint · 192.168.1.217",
+      "sources": [
+        {
+          "path": ".github/workflows/tinman-health-check.yml",
+          "line": 42,
+          "end_line": 49
+        }
+      ]
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "web + api",
+      "sublabel": "Angular 22 · Express 5",
+      "sources": [
+        {
+          "path": "package.json",
+          "line": 6,
+          "end_line": 9,
+          "label": "npm workspaces"
+        }
+      ]
+    }
+  ],
+  "overrides": {
+    "demo-create-pr": {
+      "label": "01 · create demo PR",
+      "sublabel": "opens the standing demo PR"
+    },
+    "sonar-pr-scan": {
+      "label": "02 · scan, gate & settle",
+      "sublabel": "required check `gate`",
+      "tag": "auto on PR"
+    },
+    "onboard-backlog": {
+      "label": "03 / 04 · onboard, track",
+      "sublabel": "file ticket · branch + PR per group"
+    },
+    "remediate": {
+      "label": "05 · remediate a PR",
+      "sublabel": "fix, test, push back"
+    },
+    "demo-reset": {
+      "label": "06 · reset the demo",
+      "sublabel": "back to v0-pristine"
+    },
+    "auto-continue-watch": {
+      "label": "auto-continue watch",
+      "sublabel": "workflow_run glue",
+      "type": "messagebus"
+    },
+    "tinman-health-check": {
+      "label": "99 · tinman health",
+      "sublabel": "liveness probe"
+    },
+    "file-ticket": {
+      "label": "_file-ticket",
+      "sublabel": "Jira ticket per group"
+    },
+    "branch-pr": {
+      "label": "_branch-pr",
+      "sublabel": "branch + PR per group"
+    },
+    "settle-notify": {
+      "label": "_settle-notify",
+      "sublabel": "verdict → merge / notify"
+    },
+    "sonar-remediation-automation": {
+      "label": "remediation-automation",
+      "sublabel": "codemods · jira · settle",
+      "tag": "phix/…"
+    }
+  },
+  "connections": [
+    {
+      "from": "remediate",
+      "to": "sonar-remediation-automation",
+      "label": "codemods/remediate.mjs",
+      "variant": "emphasis"
+    },
+    {
+      "from": "remediate",
+      "to": "sonar-pr-scan",
+      "label": "push fix → re-scan",
+      "variant": "emphasis"
+    },
+    {
+      "from": "demo-reset",
+      "to": "sonar-pr-scan",
+      "label": "force-push → re-scan",
+      "variant": "dashed"
+    },
+    {
+      "from": "sonar-pr-scan",
+      "to": "app",
+      "variant": "dashed",
+      "label": "scans"
+    },
+    {
+      "from": "tailscale",
+      "to": "tinman",
+      "label": "100.x tailnet IP",
+      "variant": "emphasis"
+    }
+  ],
+  "omit": [],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "phix/sonar-sandbox-app  (GitHub Actions)",
+      "wraps": [
+        "demo-create-pr",
+        "sonar-pr-scan",
+        "onboard-backlog",
+        "remediate",
+        "demo-reset",
+        "auto-continue-watch",
+        "tinman-health-check",
+        "file-ticket",
+        "branch-pr",
+        "settle-notify",
+        "state",
+        "app"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "tailnet (TS_OAUTH_* secrets)",
+      "wraps": [
+        "tailscale",
+        "tinman"
+      ]
+    }
+  ],
+  "merge": {
+    "track-finding": "onboard-backlog"
+  },
+  "exclude": [
+    "pipeline-diagram"
+  ]
+}
