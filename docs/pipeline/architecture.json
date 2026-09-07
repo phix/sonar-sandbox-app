@@ -7,7 +7,7 @@
     "visual_preset": "blueprint",
     "repository": {
       "url": "https://github.com/phix/sonar-sandbox-app",
-      "revision": "82a73a31bf9892f21efd6fa71691410575be5fcf"
+      "revision": "3ac29d7662e1284cc99ec37f21feb03e7a2ace9c"
     }
   },
   "components": [
@@ -28,7 +28,7 @@
           "label": "04 - track a finding"
         }
       ],
-      "sublabel": "file ticket · branch + PR per group",
+      "sublabel": "per finding group",
       "pos": [
         260,
         350
@@ -466,7 +466,23 @@
       "from": "branch-pr",
       "to": "sonarcloud",
       "label": "SONAR_TOKEN",
-      "variant": "security"
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          815,
+          382
+        ],
+        [
+          815,
+          142
+        ]
+      ],
+      "labelAt": [
+        725,
+        370
+      ]
     },
     {
       "id": "file-ticket--sonar-remediation-automation",
@@ -490,7 +506,23 @@
       "from": "file-ticket",
       "to": "sonarcloud",
       "label": "SONAR_TOKEN",
-      "variant": "security"
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          790,
+          262
+        ],
+        [
+          790,
+          142
+        ]
+      ],
+      "labelAt": [
+        725,
+        250
+      ]
     },
     {
       "id": "file-ticket--jira",
@@ -525,7 +557,23 @@
       "from": "settle-notify",
       "to": "sonarcloud",
       "label": "SONAR_TOKEN",
-      "variant": "security"
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          840,
+          502
+        ],
+        [
+          840,
+          142
+        ]
+      ],
+      "labelAt": [
+        725,
+        490
+      ]
     },
     {
       "id": "settle-notify--jira",

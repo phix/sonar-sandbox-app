@@ -103,7 +103,7 @@
     },
     "onboard-backlog": {
       "label": "03 / 04 · onboard, track",
-      "sublabel": "file ticket · branch + PR per group"
+      "sublabel": "per finding group"
     },
     "remediate": {
       "label": "05 · remediate a PR",

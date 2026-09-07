@@ -253,6 +253,60 @@
         1010,
         548
       ]
+    },
+    "file-ticket->sonarcloud": {
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          790,
+          262
+        ],
+        [
+          790,
+          142
+        ]
+      ],
+      "labelAt": [
+        725,
+        250
+      ]
+    },
+    "branch-pr->sonarcloud": {
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          815,
+          382
+        ],
+        [
+          815,
+          142
+        ]
+      ],
+      "labelAt": [
+        725,
+        370
+      ]
+    },
+    "settle-notify->sonarcloud": {
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          840,
+          502
+        ],
+        [
+          840,
+          142
+        ]
+      ],
+      "labelAt": [
+        725,
+        490
+      ]
     }
   }
 }
