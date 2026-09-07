@@ -18,7 +18,12 @@ export function render(receipt, { runUrl, pagesUrl }) {
     counts(summary.connections) && `edges: ${counts(summary.connections)}`,
     counts(summary.boundaries) && `boundaries: ${counts(summary.boundaries)}`,
   ].filter(Boolean);
-  lines.push(parts.length ? `**Topology changed** — ${parts.join(' · ')}.` : '**No topology change.** The workflows wire up the same way as on the base branch.');
+  const topology = ['added', 'removed'].some((k) => summary.components[k] > 0 || summary.connections[k] > 0);
+  lines.push(
+    topology ? `**Topology changed** — ${parts.join(' · ')}.`
+      : parts.length ? `**Same topology, diagram changed** — ${parts.join(' · ')}.`
+        : '**No change.** The workflows wire up the same way as on the base branch.',
+  );
   lines.push('');
   const rows = [
     ...changes.components.map((c) => ['node', `\`${c.id}\``, c.status, c.changedFields.join(', ')]),

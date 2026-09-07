@@ -108,8 +108,14 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin "$BASE"
           if git show "FETCH_HEAD:docs/pipeline/architecture.json" > base.json 2>/dev/null; then
+            # The committed IR carries a placeholder revision; stamp the base
+            # with the commit it was fetched from so its pins verify too.
+            node -e "
+              const fs = require('fs'); const ir = JSON.parse(fs.readFileSync('base.json', 'utf8'));
+              ir.meta.repository.revision = process.argv[1]; fs.writeFileSync('base.json', JSON.stringify(ir));
+            " "$(git rev-parse FETCH_HEAD)"
             $ARCHIFY compare architecture base.json site/architecture.json site/delta.html \
-              --receipt site/receipt.json --json --repo-root . > compare.json
+              --receipt site/receipt.json --json --repo-root . > compare.json || true
             node -e "const r=require('./compare.json'); if(!r.ok){console.error(JSON.stringify(r,null,2)); process.exit(1)}"
           else
             echo "::notice::no docs/pipeline/architecture.json on $BASE — nothing to compare against."

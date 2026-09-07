@@ -33,7 +33,6 @@
 // and a node dropped somewhere "for now" is how a diagram rots.
 
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { dirname, join, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument, LineCounter, isMap, isSeq, isScalar } from 'yaml';
@@ -290,7 +289,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   };
   const repoRoot = resolve(opt('--root', join(here, '../..')));
   const out = resolve(opt('--out', join(repoRoot, 'docs/pipeline/architecture.json')));
-  const revision = opt('--revision', execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot }).toString().trim());
+  // The committed IR carries a placeholder revision: a real SHA would change
+  // on every regeneration and, after a squash merge, name a commit that no
+  // longer exists. CI passes --revision with the commit it is rendering.
+  const revision = opt('--revision', '0'.repeat(40));
   const manual = JSON.parse(readFileSync(join(here, 'manual.json'), 'utf8'));
   const layout = JSON.parse(readFileSync(join(here, 'layout.json'), 'utf8'));
   const { ir, sidecar } = split(generate({ repoRoot, manual, layout, revision }));
