@@ -52,7 +52,12 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      # The PR head, not GitHub's synthetic merge commit: archify refuses an
+      # evidence revision that is not in the local clone, and the pins must
+      # name a commit a reader can open.
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Pin node
         uses: actions/setup-node@v4
