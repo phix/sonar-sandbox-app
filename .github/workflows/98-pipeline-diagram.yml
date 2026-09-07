@@ -1,0 +1,161 @@
+# UTILITY — unrelated to either path. See .github/workflows/README.md.
+#
+# Draws the pipeline from the workflows themselves. tools/pipeline-diagram reads
+# every file in this directory — job `uses:`, `workflow_run`, cross-repo
+# checkouts, the secrets each one touches — and emits an archify architecture
+# IR in which every node and edge is pinned to the line it came from. archify
+# (https://github.com/tt-a1i/archify) validates and renders that into one
+# self-contained HTML, published to GitHub Pages on every push to main that
+# touches the wiring. On a pull request the same job diffs the PR's topology
+# against main and leaves the delta as a comment.
+#
+# archify ships as an agent-skill directory, not an npm package, so it is
+# checked out at a pinned commit rather than vendored. Bump ARCHIFY_SHA on
+# purpose, then validate locally (tools/pipeline-diagram/README.md) — its
+# layout rules tighten between versions.
+#
+# The diagram deliberately excludes itself (manual.json `exclude`): this is a
+# utility, not a pipeline stage. Numbered 98 so it sorts beside 99 and away
+# from the 01–06 walkthrough. Charted on the wayfinder map, issue #25.
+name: 98 - pipeline diagram
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - 'tools/pipeline-diagram/**'
+      - 'docs/pipeline/**'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - 'tools/pipeline-diagram/**'
+      - 'docs/pipeline/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  ARCHIFY_SHA: 920543baa1c6137803c5b45a69d8977152773d35
+  ARCHIFY: node .archify/archify/bin/archify.mjs
+  # The published diagram; also cited in the PR comment so the delta has a
+  # "before" to click.
+  PAGES_URL: https://phix.github.io/sonar-sandbox-app/
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # The PR head, not GitHub's synthetic merge commit: archify refuses an
+      # evidence revision that is not in the local clone, and the pins must
+      # name a commit a reader can open.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Pin node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Only the root devDependencies (the YAML parser). The web and api
+      # workspaces are the scan target, not a build input here.
+      - name: Install the generator's dependency
+        run: npm ci --workspaces=false --ignore-scripts --no-audit --no-fund
+
+      - name: Check out archify at the pinned commit
+        uses: actions/checkout@v5
+        with:
+          repository: tt-a1i/archify
+          ref: ${{ env.ARCHIFY_SHA }}
+          path: .archify
+
+      - name: Generator tests
+        run: npm run test:diagram
+
+      # docs/pipeline/architecture.json is committed so a wiring change shows
+      # up in review. If a PR changes a workflow without regenerating, this is
+      # where it goes red — the fix is `npm run diagram` and a commit.
+      - name: The committed IR must match the workflows
+        run: node tools/pipeline-diagram/generate-ir.mjs --check
+
+      # Re-generated here rather than copied, so the evidence links in the
+      # published HTML pin to the commit actually being rendered.
+      - name: Generate the IR pinned to this commit
+        env:
+          REV: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node tools/pipeline-diagram/generate-ir.mjs --revision "$REV" --out site/architecture.json
+
+      - name: Validate (standard bar) and render
+        run: |
+          $ARCHIFY validate architecture site/architecture.json --repo-root . --quality standard
+          $ARCHIFY render architecture site/architecture.json site/index.html --repo-root . --quality standard
+          $ARCHIFY check site/index.html
+
+      # Base is main's committed IR — the generator's own output at the merge
+      # base, so the diff is wiring-to-wiring, not render-to-render. A first
+      # PR (no diagram on main yet) simply has nothing to compare against.
+      - name: Diff the topology against the base branch
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE"
+          if git show "FETCH_HEAD:docs/pipeline/architecture.json" > base.json 2>/dev/null; then
+            $ARCHIFY compare architecture base.json site/architecture.json site/delta.html \
+              --receipt site/receipt.json --json --repo-root . > compare.json
+            node -e "const r=require('./compare.json'); if(!r.ok){console.error(JSON.stringify(r,null,2)); process.exit(1)}"
+          else
+            echo "::notice::no docs/pipeline/architecture.json on $BASE — nothing to compare against."
+          fi
+
+      - name: Write the PR comment
+        if: github.event_name == 'pull_request'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node tools/pipeline-diagram/pr-comment.mjs site/receipt.json > comment.md
+
+      # Fork PRs get no write token; the pipeline README already rules them
+      # out of scope for the same reason.
+      - name: Post the delta on the PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: ./.github/actions/upsert-pr-comment
+        with:
+          file: comment.md
+          marker: '<!-- pipeline-diagram -->'
+          pr: ${{ github.event.pull_request.number }}
+
+      - name: Keep the rendered diagram (and delta) on the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-diagram
+          path: site
+
+      - name: Stage for Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: render
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

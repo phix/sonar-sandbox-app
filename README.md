@@ -32,6 +32,8 @@ a **demo walkthrough** against this repo's own planted smells, or a
 **finding-driven, Jira-tracked** run against a real backlog. See
 [`.github/workflows/README.md`](.github/workflows/README.md) for which
 workflow to run and when.
+The same wiring, drawn from the workflow files and pinned to source:
+<https://phix.github.io/sonar-sandbox-app/>.
 
 ## Layout
 
@@ -39,6 +41,7 @@ workflow to run and when.
 web/    Angular frontend
 api/    Express API
 smells/ catalogue of every planted defect and its expected Sonar rule
+tools/  pipeline-diagram — generates docs/pipeline/ from .github/workflows
 ```
 
 Two modules, deliberately: it makes the pipeline's module-prefix grouping meaningful rather than degenerate.

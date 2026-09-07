@@ -1,0 +1,674 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Sonar remediation pipeline",
+    "subtitle": "Generated from .github/workflows — every node and edge is pinned to the line it was read from",
+    "visual_preset": "blueprint",
+    "repository": {
+      "url": "https://github.com/phix/sonar-sandbox-app",
+      "revision": "82a73a31bf9892f21efd6fa71691410575be5fcf"
+    }
+  },
+  "components": [
+    {
+      "id": "onboard-backlog",
+      "type": "frontend",
+      "label": "03 / 04 · onboard, track",
+      "tag": "manual",
+      "sources": [
+        {
+          "path": ".github/workflows/03-onboard-backlog.yml",
+          "line": 14,
+          "label": "03 - onboard a backlog"
+        },
+        {
+          "path": ".github/workflows/04-track-finding.yml",
+          "line": 16,
+          "label": "04 - track a finding"
+        }
+      ],
+      "sublabel": "file ticket · branch + PR per group",
+      "pos": [
+        260,
+        350
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "branch-pr",
+      "type": "backend",
+      "label": "_branch-pr",
+      "sources": [
+        {
+          "path": ".github/workflows/_branch-pr.yml",
+          "line": 13,
+          "label": "_branch-pr"
+        }
+      ],
+      "sublabel": "branch + PR per group",
+      "pos": [
+        480,
+        350
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "file-ticket",
+      "type": "backend",
+      "label": "_file-ticket",
+      "sources": [
+        {
+          "path": ".github/workflows/_file-ticket.yml",
+          "line": 16,
+          "label": "_file-ticket"
+        }
+      ],
+      "sublabel": "Jira ticket per group",
+      "pos": [
+        480,
+        230
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "settle-notify",
+      "type": "backend",
+      "label": "_settle-notify",
+      "sources": [
+        {
+          "path": ".github/workflows/_settle-notify.yml",
+          "line": 15,
+          "label": "_settle-notify"
+        }
+      ],
+      "sublabel": "verdict → merge / notify",
+      "pos": [
+        480,
+        470
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "auto-continue-watch",
+      "type": "messagebus",
+      "label": "auto-continue watch",
+      "sources": [
+        {
+          "path": ".github/workflows/auto-continue-watch.yml",
+          "line": 19,
+          "label": "auto-continue watch"
+        }
+      ],
+      "sublabel": "workflow_run glue",
+      "pos": [
+        480,
+        590
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "demo-create-pr",
+      "type": "frontend",
+      "label": "01 · create demo PR",
+      "tag": "manual",
+      "sources": [
+        {
+          "path": ".github/workflows/demo-create-pr.yml",
+          "line": 14,
+          "label": "01 - create the demo PR"
+        }
+      ],
+      "sublabel": "opens the standing demo PR",
+      "pos": [
+        260,
+        230
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "demo-reset",
+      "type": "frontend",
+      "label": "06 · reset the demo",
+      "tag": "manual",
+      "sources": [
+        {
+          "path": ".github/workflows/demo-reset.yml",
+          "line": 15,
+          "label": "06 - reset the demo"
+        }
+      ],
+      "sublabel": "back to v0-pristine",
+      "pos": [
+        260,
+        470
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "remediate",
+      "type": "frontend",
+      "label": "05 · remediate a PR",
+      "tag": "manual",
+      "sources": [
+        {
+          "path": ".github/workflows/remediate.yml",
+          "line": 26,
+          "label": "05 - remediate a PR"
+        }
+      ],
+      "sublabel": "fix, test, push back",
+      "pos": [
+        260,
+        830
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "sonar-pr-scan",
+      "type": "frontend",
+      "label": "02 · scan, gate & settle",
+      "sources": [
+        {
+          "path": ".github/workflows/sonar-pr-scan.yml",
+          "line": 23,
+          "label": "02 - scan, gate & settle"
+        }
+      ],
+      "sublabel": "required check `gate`",
+      "tag": "auto on PR",
+      "pos": [
+        260,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "tinman-health-check",
+      "type": "frontend",
+      "label": "99 · tinman health",
+      "tag": "manual",
+      "sources": [
+        {
+          "path": ".github/workflows/tinman-health-check.yml",
+          "line": 16,
+          "label": "99 - tinman health check"
+        }
+      ],
+      "sublabel": "liveness probe",
+      "pos": [
+        260,
+        710
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "sonar-remediation-automation",
+      "type": "backend",
+      "label": "remediation-automation",
+      "sublabel": "codemods · jira · settle",
+      "sources": [
+        {
+          "path": ".github/workflows/03-onboard-backlog.yml",
+          "line": 55
+        }
+      ],
+      "tag": "phix/…",
+      "pos": [
+        700,
+        710
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "state",
+      "type": "database",
+      "label": "state branch",
+      "sublabel": "attempt counts, group state",
+      "sources": [
+        {
+          "path": ".github/workflows/03-onboard-backlog.yml",
+          "line": 69
+        }
+      ],
+      "pos": [
+        700,
+        830
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "sonarcloud",
+      "type": "cloud",
+      "label": "SonarCloud",
+      "sublabel": "phix / phix_sonar-sandbox-app",
+      "sources": [
+        {
+          "path": ".github/workflows/03-onboard-backlog.yml",
+          "line": 66
+        }
+      ],
+      "pos": [
+        920,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "jira",
+      "type": "cloud",
+      "label": "Jira",
+      "sublabel": "1337software · project SONAR",
+      "sources": [
+        {
+          "path": ".github/workflows/_file-ticket.yml",
+          "line": 116
+        }
+      ],
+      "pos": [
+        920,
+        230
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "telegram",
+      "type": "cloud",
+      "label": "Telegram",
+      "sublabel": "optional bot notify",
+      "sources": [
+        {
+          "path": ".github/workflows/_settle-notify.yml",
+          "line": 144
+        }
+      ],
+      "pos": [
+        920,
+        350
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "tailscale",
+      "type": "security",
+      "label": "Tailscale",
+      "sublabel": "ephemeral tag:ci node",
+      "sources": [
+        {
+          "path": ".github/workflows/remediate.yml",
+          "line": 259
+        }
+      ],
+      "pos": [
+        920,
+        470
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "tinman",
+      "type": "backend",
+      "label": "tinman",
+      "sublabel": "LLM endpoint · 192.168.1.217",
+      "sources": [
+        {
+          "path": ".github/workflows/tinman-health-check.yml",
+          "line": 42,
+          "end_line": 49
+        }
+      ],
+      "pos": [
+        920,
+        590
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "web + api",
+      "sublabel": "Angular 22 · Express 5",
+      "sources": [
+        {
+          "path": "package.json",
+          "line": 6,
+          "end_line": 9,
+          "label": "npm workspaces"
+        }
+      ],
+      "pos": [
+        40,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "phix/sonar-sandbox-app  (GitHub Actions)",
+      "wraps": [
+        "demo-create-pr",
+        "sonar-pr-scan",
+        "onboard-backlog",
+        "remediate",
+        "demo-reset",
+        "auto-continue-watch",
+        "tinman-health-check",
+        "file-ticket",
+        "branch-pr",
+        "settle-notify",
+        "state",
+        "app"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "tailnet (TS_OAUTH_* secrets)",
+      "wraps": [
+        "tailscale",
+        "tinman"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "onboard-backlog--file-ticket",
+      "from": "onboard-backlog",
+      "to": "file-ticket",
+      "label": "ticket",
+      "variant": "emphasis"
+    },
+    {
+      "id": "onboard-backlog--branch-pr",
+      "from": "onboard-backlog",
+      "to": "branch-pr",
+      "label": "branch-pr",
+      "variant": "emphasis",
+      "labelAt": [
+        460,
+        428
+      ]
+    },
+    {
+      "id": "branch-pr--sonar-remediation-automation",
+      "from": "branch-pr",
+      "to": "sonar-remediation-automation",
+      "label": "checkout"
+    },
+    {
+      "id": "branch-pr--state",
+      "from": "branch-pr",
+      "to": "state",
+      "label": "state-checkout",
+      "variant": "dashed",
+      "labelAt": [
+        680,
+        668
+      ]
+    },
+    {
+      "id": "branch-pr--sonarcloud",
+      "from": "branch-pr",
+      "to": "sonarcloud",
+      "label": "SONAR_TOKEN",
+      "variant": "security"
+    },
+    {
+      "id": "file-ticket--sonar-remediation-automation",
+      "from": "file-ticket",
+      "to": "sonar-remediation-automation",
+      "label": "checkout",
+      "labelAt": [
+        680,
+        548
+      ]
+    },
+    {
+      "id": "file-ticket--state",
+      "from": "file-ticket",
+      "to": "state",
+      "label": "state-checkout",
+      "variant": "dashed"
+    },
+    {
+      "id": "file-ticket--sonarcloud",
+      "from": "file-ticket",
+      "to": "sonarcloud",
+      "label": "SONAR_TOKEN",
+      "variant": "security"
+    },
+    {
+      "id": "file-ticket--jira",
+      "from": "file-ticket",
+      "to": "jira",
+      "label": "JIRA_API_TOKEN",
+      "variant": "security",
+      "labelAt": [
+        684,
+        308
+      ]
+    },
+    {
+      "id": "settle-notify--sonar-remediation-automation",
+      "from": "settle-notify",
+      "to": "sonar-remediation-automation",
+      "label": "checkout",
+      "labelAt": [
+        680,
+        668
+      ]
+    },
+    {
+      "id": "settle-notify--state",
+      "from": "settle-notify",
+      "to": "state",
+      "label": "state-checkout",
+      "variant": "dashed"
+    },
+    {
+      "id": "settle-notify--sonarcloud",
+      "from": "settle-notify",
+      "to": "sonarcloud",
+      "label": "SONAR_TOKEN",
+      "variant": "security"
+    },
+    {
+      "id": "settle-notify--jira",
+      "from": "settle-notify",
+      "to": "jira",
+      "label": "JIRA_API_TOKEN",
+      "variant": "security"
+    },
+    {
+      "id": "settle-notify--telegram",
+      "from": "settle-notify",
+      "to": "telegram",
+      "label": "TELEGRAM_BOT_TOKEN",
+      "variant": "security"
+    },
+    {
+      "id": "sonar-pr-scan--auto-continue-watch",
+      "from": "sonar-pr-scan",
+      "to": "auto-continue-watch",
+      "label": "workflow_run",
+      "labelAt": [
+        460,
+        428
+      ]
+    },
+    {
+      "id": "auto-continue-watch--sonar-remediation-automation",
+      "from": "auto-continue-watch",
+      "to": "sonar-remediation-automation",
+      "label": "checkout"
+    },
+    {
+      "id": "auto-continue-watch--state",
+      "from": "auto-continue-watch",
+      "to": "state",
+      "label": "state-checkout",
+      "variant": "dashed",
+      "labelAt": [
+        680,
+        788
+      ]
+    },
+    {
+      "id": "auto-continue-watch--remediate",
+      "from": "auto-continue-watch",
+      "to": "remediate",
+      "label": "gh workflow run",
+      "labelAt": [
+        460,
+        788
+      ]
+    },
+    {
+      "id": "demo-create-pr--sonar-pr-scan",
+      "from": "demo-create-pr",
+      "to": "sonar-pr-scan",
+      "label": "opens PR",
+      "variant": "emphasis"
+    },
+    {
+      "id": "remediate--file-ticket",
+      "from": "remediate",
+      "to": "file-ticket",
+      "label": "ticket",
+      "variant": "emphasis"
+    },
+    {
+      "id": "remediate--tailscale",
+      "from": "remediate",
+      "to": "tailscale",
+      "label": "join tailnet",
+      "variant": "security"
+    },
+    {
+      "id": "sonar-pr-scan--settle-notify",
+      "from": "sonar-pr-scan",
+      "to": "settle-notify",
+      "label": "settle",
+      "variant": "emphasis"
+    },
+    {
+      "id": "tinman-health-check--sonar-remediation-automation",
+      "from": "tinman-health-check",
+      "to": "sonar-remediation-automation",
+      "label": "checkout"
+    },
+    {
+      "id": "tinman-health-check--tailscale",
+      "from": "tinman-health-check",
+      "to": "tailscale",
+      "label": "join tailnet",
+      "variant": "security",
+      "labelAt": [
+        680,
+        668
+      ]
+    },
+    {
+      "id": "remediate--sonar-remediation-automation",
+      "from": "remediate",
+      "to": "sonar-remediation-automation",
+      "label": "codemods/remediate.mjs",
+      "variant": "emphasis"
+    },
+    {
+      "id": "remediate--sonar-pr-scan",
+      "from": "remediate",
+      "to": "sonar-pr-scan",
+      "label": "push fix → re-scan",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "left",
+      "labelAt": [
+        232,
+        548
+      ]
+    },
+    {
+      "id": "demo-reset--sonar-pr-scan",
+      "from": "demo-reset",
+      "to": "sonar-pr-scan",
+      "label": "force-push → re-scan",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "left"
+    },
+    {
+      "id": "sonar-pr-scan--app",
+      "from": "sonar-pr-scan",
+      "to": "app",
+      "variant": "dashed",
+      "label": "scans"
+    },
+    {
+      "id": "tailscale--tinman",
+      "from": "tailscale",
+      "to": "tinman",
+      "label": "100.x tailnet IP",
+      "variant": "emphasis",
+      "labelAt": [
+        1010,
+        548
+      ]
+    }
+  ]
+}

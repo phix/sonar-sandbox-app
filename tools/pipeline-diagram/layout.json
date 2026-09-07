@@ -1,0 +1,258 @@
+{
+  "nodes": {
+    "app": {
+      "pos": [
+        40,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "sonar-pr-scan": {
+      "pos": [
+        260,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "demo-create-pr": {
+      "pos": [
+        260,
+        230
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "onboard-backlog": {
+      "pos": [
+        260,
+        350
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "demo-reset": {
+      "pos": [
+        260,
+        470
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "tinman-health-check": {
+      "pos": [
+        260,
+        710
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "remediate": {
+      "pos": [
+        260,
+        830
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "file-ticket": {
+      "pos": [
+        480,
+        230
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "branch-pr": {
+      "pos": [
+        480,
+        350
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "settle-notify": {
+      "pos": [
+        480,
+        470
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "auto-continue-watch": {
+      "pos": [
+        480,
+        590
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "sonar-remediation-automation": {
+      "pos": [
+        700,
+        710
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "state": {
+      "pos": [
+        700,
+        830
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "sonarcloud": {
+      "pos": [
+        920,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "jira": {
+      "pos": [
+        920,
+        230
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "telegram": {
+      "pos": [
+        920,
+        350
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "tailscale": {
+      "pos": [
+        920,
+        470
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    "tinman": {
+      "pos": [
+        920,
+        590
+      ],
+      "size": [
+        180,
+        64
+      ]
+    }
+  },
+  "edges": {
+    "remediate->sonar-pr-scan": {
+      "fromSide": "left",
+      "toSide": "left",
+      "labelAt": [
+        232,
+        548
+      ]
+    },
+    "demo-reset->sonar-pr-scan": {
+      "fromSide": "left",
+      "toSide": "left"
+    },
+    "onboard-backlog->branch-pr": {
+      "labelAt": [
+        460,
+        428
+      ]
+    },
+    "branch-pr->state": {
+      "labelAt": [
+        680,
+        668
+      ]
+    },
+    "file-ticket->sonar-remediation-automation": {
+      "labelAt": [
+        680,
+        548
+      ]
+    },
+    "file-ticket->jira": {
+      "labelAt": [
+        684,
+        308
+      ]
+    },
+    "settle-notify->sonar-remediation-automation": {
+      "labelAt": [
+        680,
+        668
+      ]
+    },
+    "sonar-pr-scan->auto-continue-watch": {
+      "labelAt": [
+        460,
+        428
+      ]
+    },
+    "auto-continue-watch->state": {
+      "labelAt": [
+        680,
+        788
+      ]
+    },
+    "auto-continue-watch->remediate": {
+      "labelAt": [
+        460,
+        788
+      ]
+    },
+    "tinman-health-check->tailscale": {
+      "labelAt": [
+        680,
+        668
+      ]
+    },
+    "tailscale->tinman": {
+      "labelAt": [
+        1010,
+        548
+      ]
+    }
+  }
+}
