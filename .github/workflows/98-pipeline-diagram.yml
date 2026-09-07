@@ -11,7 +11,7 @@
 #
 # archify ships as an agent-skill directory, not an npm package, so it is
 # checked out at a pinned commit rather than vendored. Bump ARCHIFY_SHA on
-# purpose, then re-run validate locally (npm run diagram:validate) — its
+# purpose, then validate locally (tools/pipeline-diagram/README.md) — its
 # layout rules tighten between versions.
 #
 # The diagram deliberately excludes itself (manual.json `exclude`): this is a
