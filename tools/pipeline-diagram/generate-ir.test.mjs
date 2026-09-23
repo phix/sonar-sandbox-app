@@ -26,6 +26,7 @@ test('every workflow file except the excluded ones becomes a node', () => {
   }
   assert.ok(!ids.has('track-finding'), '04 is merged into 03');
   assert.ok(!ids.has('pipeline-diagram'), 'the diagram workflow excludes itself');
+  assert.ok(!ids.has('sonar-main-scan'), '97 scans main for a gate baseline; a utility, not a pipeline stage');
 });
 
 test('reusable-module calls, workflow_run and dispatch become edges with evidence', () => {

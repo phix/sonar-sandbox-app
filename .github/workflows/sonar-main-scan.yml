@@ -1,0 +1,68 @@
+# UTILITY — unrelated to either path. See .github/workflows/README.md.
+#
+# Scan main on every push, so main's quality gate has a new-code baseline and
+# is actually computed. Every other scan in this repo is a pull-request
+# analysis (02 passes sonar.pullrequest.*), so without this main is analysed
+# once and never again, and its gate answers NONE forever: the gate's
+# conditions are all new_* and the new-code definition is previous_version, so
+# a branch with a single analysis has nothing to compare against.
+#
+# readiness-forge reads main's gate (qualitygates/project_status with no branch
+# parameter) as a component's quality signal, and cites the analysed revision
+# as evidence. This keeps that revision in step with main's head.
+#
+# Deliberately a separate workflow and a job NOT named `gate`: `gate` is the
+# required status context on main (sonar-pr-scan.yml), and a push-to-main scan
+# must never be able to satisfy or block a pull request. Nothing here waits on
+# the gate, comments, or settles — it only gives Sonar a main-branch analysis.
+#
+# Excluded from the pipeline diagram (tools/pipeline-diagram/manual.json
+# `exclude`), like 98: a baseline utility, not a remediation stage.
+name: 97 - scan main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Only the newest main matters; an older push's analysis is superseded.
+concurrency:
+  group: sonar-main-scan
+  cancel-in-progress: true
+
+jobs:
+  scan-main:
+    name: scan main
+    runs-on: ubuntu-latest
+    # The same light container as 02's gate job. The scanner action brings its
+    # own embedded Java.
+    container: node:24-bookworm
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Sonar needs real history for new-code attribution and blame.
+          fetch-depth: 0
+
+      # Coverage is measured before the scan: the scanner reads lcov off disk.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Make lcov paths repo-root relative
+        run: |
+          node .github/scripts/normalize-lcov.mjs api/coverage/lcov.info api
+          node .github/scripts/normalize-lcov.mjs web/coverage/web/lcov.info web
+
+      # No sonar.pullrequest.* arguments: the action detects the pushed branch
+      # (main) from the run's ref and records a branch analysis.
+      - name: Scan main
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
