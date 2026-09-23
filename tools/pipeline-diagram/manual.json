@@ -205,6 +205,7 @@
     "track-finding": "onboard-backlog"
   },
   "exclude": [
-    "pipeline-diagram"
+    "pipeline-diagram",
+    "sonar-main-scan"
   ]
 }
