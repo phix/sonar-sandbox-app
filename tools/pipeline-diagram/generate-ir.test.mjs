@@ -40,7 +40,7 @@ test('reusable-module calls, workflow_run and dispatch become edges with evidenc
 test('external repos, services and secrets are derived, then folded through modules', () => {
   assert.ok(ids.has('sonar-remediation-automation'));
   assert.equal(edge('file-ticket', 'jira')?.label, 'JIRA_API_TOKEN');
-  assert.equal(edge('settle-notify', 'telegram')?.label, 'TELEGRAM_BOT_TOKEN');
+  assert.equal(edge('settle-notify', 'telegram'), undefined, 'no chat channel: the verdict is the settle PR comment');
   assert.equal(edge('remediate', 'tailscale')?.label, 'join tailnet');
   assert.equal(edge('onboard-backlog', 'sonarcloud'), undefined, '03 → SonarCloud is drawn from _file-ticket instead');
   assert.equal(ir._folded['onboard-backlog->sonarcloud'], 'drawn from file-ticket');

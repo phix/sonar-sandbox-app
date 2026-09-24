@@ -59,7 +59,7 @@ to supply it for you — there's no reason to.
 |---|---|
 | [`_file-ticket.yml`](_file-ticket.yml) | `03`, `04` — files or finds a Jira ticket per finding group in scope. |
 | [`_branch-pr.yml`](_branch-pr.yml) | `03`, `04` — creates or finds the branch + PR for one group. |
-| [`_settle-notify.yml`](_settle-notify.yml) | `02`'s `settle` job — reads the gate verdict, decides ready/red, optionally auto-merges, notifies Telegram + Jira. |
+| [`_settle-notify.yml`](_settle-notify.yml) | `02`'s `settle` job — reads the gate verdict, decides ready/red, optionally auto-merges, posts the verdict on the PR, and records the outcome on any ticket the PR already had. |
 
 ## Utility — unrelated to either path
 

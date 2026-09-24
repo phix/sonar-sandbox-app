@@ -91,7 +91,7 @@
           "label": "_settle-notify"
         }
       ],
-      "sublabel": "verdict → merge / notify",
+      "sublabel": "verdict → merge / PR comment",
       "pos": [
         480,
         470
@@ -307,26 +307,6 @@
       "pos": [
         920,
         230
-      ],
-      "size": [
-        180,
-        64
-      ]
-    },
-    {
-      "id": "telegram",
-      "type": "cloud",
-      "label": "Telegram",
-      "sublabel": "optional bot notify",
-      "sources": [
-        {
-          "path": ".github/workflows/_settle-notify.yml",
-          "line": 144
-        }
-      ],
-      "pos": [
-        920,
-        350
       ],
       "size": [
         180,
@@ -580,13 +560,6 @@
       "from": "settle-notify",
       "to": "jira",
       "label": "JIRA_API_TOKEN",
-      "variant": "security"
-    },
-    {
-      "id": "settle-notify--telegram",
-      "from": "settle-notify",
-      "to": "telegram",
-      "label": "TELEGRAM_BOT_TOKEN",
       "variant": "security"
     },
     {

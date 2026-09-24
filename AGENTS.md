@@ -23,7 +23,7 @@ happens in-session, by hand. Two consequences worth stating plainly:
 | Repo | Holds | Role |
 |---|---|---|
 | `phix/sonar-sandbox-app` — **this repo** | target code **and every workflow** | intentionally defective Angular 22 + Express 5 app; 32 planted findings; the CI that drives the pipeline |
-| `phix/sonar-remediation-automation` | engine code, decision records | deterministic codemods first, one LLM call last; Jira, settle, telegram. Never touches git — the workflow owns commits and pushes |
+| `phix/sonar-remediation-automation` | engine code, decision records | deterministic codemods first, one LLM call last; Jira, settle. Never touches git — the workflow owns commits and pushes |
 
 Both repos are **public**. Never commit a secret to either; credentials are
 GitHub Actions encrypted secrets, and locally the macOS Keychain
@@ -99,13 +99,18 @@ Every external surface it reaches:
 |---|---|
 | SonarQube Cloud | org `phix`, project `phix_sonar-sandbox-app` (`sonar-project.properties`) |
 | Jira | `https://1337software.atlassian.net`, project `SONAR` |
-| Telegram | bot `@SonarScannerFixBot` — **Teams is dead** (M365 licensing) |
 | tinman | Ollama `/v1` on Nick's LAN (`192.168.1.217`, tailnet `100.102.1.50`); jobs join the tailnet in-job with `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET`, ACL tag `tag:ci` |
 | `automation-state` | orphan branch in **this** repo holding `plan.json`, so "which group already has a ticket/branch/PR" survives across separately-triggered runs |
 
+There is **no notification channel**, and that is deliberate. Telegram was
+removed 2026-09-24 (it had replaced Teams, which died on M365 licensing). The
+terminal verdict is the `<!-- sonar-settle -->` comment `settle` posts on the PR
+itself — so the outcome can never drift from the change it describes. Do not add
+a chat channel back without a decision record.
+
 Secrets set on this repo (verified 2026-09-24): `JIRA_API_TOKEN`,
-`JIRA_USER_EMAIL`, `SANDBOX_REPO_TOKEN`, `SONAR_TOKEN`, `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_CHAT_ID`, `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`.
+`JIRA_USER_EMAIL`, `SANDBOX_REPO_TOKEN`, `SONAR_TOKEN`, `TS_OAUTH_CLIENT_ID`,
+`TS_OAUTH_SECRET`.
 
 ## Which workflow to run
 
@@ -125,18 +130,16 @@ inferring from filenames. Short version:
   `_settle-notify`. They exist because GitHub lists every workflow in the sidebar.
 - **Utility**: `99 - tinman health check`, `98 - pipeline diagram`.
 
-### The three switches — only one of them is an input
+### The switches
 
 - **Jira** is genuinely opt-in: `05 - remediate a PR` takes a `jira` input,
   default `false`, and the settle stage only records an outcome against groups
   that already carry a ticket key. A PR that never turned Jira on files nothing.
-- **Telegram** notifies whenever `TELEGRAM_BOT_TOKEN` is set on this repo — and
-  it is. **Off means the secret is absent, not an input set to false.** So
-  opening a PR sends one message at the terminal state; that is the designed
-  contract, not noise to suppress.
 - **Auto-merge** is off unless the repo variable `AUTO_MERGE_ENABLED` is `true`.
   It is **not set**, so `settle` never merges and every merge here is a human or
   agent action.
+- **Notification** is not a switch at all any more — there is no channel. The
+  verdict is the PR comment (see above).
 
 ## Derive state, never remember it
 
@@ -211,11 +214,13 @@ not the smells — which is why `settle` exits 0 on red.
 - **`archive/` is untracked** (`?? archive/` in `git status`) — a full copy of
   the pre-split automation repo (`SonarScanGenesis`). It is not source. Leave it
   alone unless Nick says otherwise; never let it be committed by accident.
-- **The README's demo narrative is stale about switches**: it describes
-  `telegram_notify` and `auto_merge` as inputs defaulting to `false`. No such
-  inputs exist — see the three switches above. The workflow map is otherwise
-  accurate; the other stale docs live in the automation repo (Teams vs Telegram,
-  "sandbox repo does not exist yet").
+- **Do not reintroduce a notification channel.** Telegram was removed on purpose
+  (2026-09-24) after Teams died on M365 licensing; the verdict lives on the PR.
+  The automation repo's `docs/decisions/notify-pr-comment-only.md` records why,
+  and its `README.md` still carries some pre-removal prose about
+  `telegram_notify` — that is stale, the workflows have no such input.
+  `docs/research/archify/` also holds a dated pre-removal snapshot; it is
+  historical research, not current topology.
 
 ## Where to go deeper
 

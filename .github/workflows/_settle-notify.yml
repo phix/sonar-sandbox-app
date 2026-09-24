@@ -1,8 +1,8 @@
 # REUSABLE MODULE — called by 02's settle job, not meant to be run directly.
 # See .github/workflows/README.md.
 #
-# Module: read the gate, decide ready/red, optionally auto-merge, tell
-# Telegram, and — new — tell the ticket what happened. Extracted from
+# Module: read the gate, decide ready/red, optionally auto-merge, publish the
+# verdict on the PR, and — new — tell the ticket what happened. Extracted from
 # sonar-pr-scan.yml's `settle` job so onboard-backlog/track-finding's
 # auto-continue watcher can call the same logic a PR-triggered scan does,
 # rather than reimplementing it.
@@ -127,40 +127,21 @@ jobs:
           echo "state=$(node -e "console.log(require('./settle.json').verdict.state)")" >> "$GITHUB_OUTPUT"
           echo "reason=$(node -e "console.log(require('./settle.json').verdict.reason)")" >> "$GITHUB_OUTPUT"
 
+      # The terminal verdict, and the ONLY place it is published. There is no
+      # out-of-band notification channel by design: the PR the loop is scoped to
+      # is also where its outcome is reported, so the verdict can never be
+      # separated from the change it is about, and a second surface can never
+      # disagree with it.
+      #
+      # Telegram was removed 2026-09-24 (it had replaced Teams, which died on
+      # M365 licensing). Do not reintroduce a chat channel here without an
+      # explicit decision record: "one message" was always the contract, and this
+      # comment is that message.
       - uses: ./.github/actions/upsert-pr-comment
         with:
           file: settle-comment.md
           marker: "<!-- sonar-settle -->"
           pr: ${{ inputs.pr }}
-
-      # The one message the whole loop exists to produce. See notify.mjs and
-      # docs/decisions/notify-telegram-not-teams.md in the automation repo for
-      # the tri-state (off / on-unconfigured-so-red / delivered) reasoning.
-      # preflight: optional-secret TELEGRAM_BOT_TOKEN
-      # preflight: optional-secret TELEGRAM_CHAT_ID
-      - name: Tell Telegram
-        if: always()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ ! -f settle.json ]; then
-            echo "::warning title=No verdict to send::settle produced no settle.json, so there is nothing to notify about."
-            exit 0
-          fi
-          enabled=""
-          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
-            enabled="--enabled"
-          else
-            echo "TELEGRAM_BOT_TOKEN is not set on this repository; notification stays off (the default)."
-          fi
-          node .automation/telegram/notify.mjs \
-            --verdict "${{ steps.settle.outputs.state }}" --reason "${{ steps.settle.outputs.reason }}" $enabled \
-            --repo "$GITHUB_REPOSITORY" \
-            --pr "${{ inputs.pr }}" \
-            --pr-url "${{ inputs.pr_url }}" \
-            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --json telegram.json
 
       # The piece that was missing entirely before: a ticket learns whether
       # remediation on ITS PR actually worked, per group — not the whole PR's
