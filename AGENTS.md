@@ -152,14 +152,29 @@ gh api repos/phix/sonar-sandbox-app/branches/main/protection \
   --jq '.required_status_checks.contexts'          # a 404 means unprotected
 ```
 
-Branch protection on `main`: PR required, **0 approvals**, `enforce_admins:
-false`, force-pushes **allowed** (that is how `06 - reset the demo` works),
-deletions off. The required status check is the job named **`gate`** — that is
-what makes a red gate genuinely block the merge button. The admin bypass exists
-for Nick and the reset only; the automation authenticates as a non-admin PAT, so
-protection binds it fully. That configuration is a sandbox affordance, **not** a
-recommendation for the office version (`docs/decisions/cross-repo-auth.md` in the
-automation repo).
+Branch protection on `main`, **measured 2026-09-24** — not quoted from the decision
+record, which is stale on two of these:
+
+| Setting | Value | Note |
+|---|---|---|
+| PR required | yes | |
+| Approvals | **0** | Nick is the only human |
+| Required check | **`gate`** | the job name, not the workflow's display name — this is what makes a red gate block the merge button |
+| `strict` | false | the branch need not be up to date with `main` |
+| Force-pushes | allowed | vestigial: the reset stopped pushing `main` |
+| Deletions | off | |
+| `enforce_admins` | **`true`** | the protection binds admins, including the token a session uses |
+
+Two consequences worth knowing before you try to merge anything:
+
+- **A red gate cannot be merged by anyone here, admin bypass included.** If the
+  gate is red, that is a real stop: fix the cause or say so out loud. Do not go
+  hunting for a bypass — on this repo's settings there is not one.
+- `docs/decisions/cross-repo-auth.md` (automation repo) still describes
+  `enforce_admins: false` and justifies it by "the one-click reset force-pushes
+  `main` back to `v0-pristine`". Neither holds: admins are enforced, and
+  `06 - reset the demo` force-pushes **`demo/planted-smells`** and explicitly never
+  touches `main` — it keeps the `v0-clean` tag tracking `main` instead.
 
 ## Commands
 
