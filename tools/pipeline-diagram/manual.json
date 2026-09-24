@@ -52,14 +52,6 @@
         "label": "Jira",
         "sublabel": "1337software · project SONAR"
       }
-    },
-    "TELEGRAM_BOT_TOKEN": {
-      "id": "telegram",
-      "node": {
-        "type": "cloud",
-        "label": "Telegram",
-        "sublabel": "optional bot notify"
-      }
     }
   },
   "components": [
@@ -132,7 +124,7 @@
     },
     "settle-notify": {
       "label": "_settle-notify",
-      "sublabel": "verdict → merge / notify"
+      "sublabel": "verdict → merge / PR comment"
     },
     "sonar-remediation-automation": {
       "label": "remediation-automation",
