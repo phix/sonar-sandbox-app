@@ -125,9 +125,18 @@ inferring from filenames. Short version:
   `_settle-notify`. They exist because GitHub lists every workflow in the sidebar.
 - **Utility**: `99 - tinman health check`, `98 - pipeline diagram`.
 
-Switches are **off by default** (`jira`, `telegram_notify`, `auto_merge`): the
-out-of-the-box pipeline scans, fixes, pushes and stops. The demo turns them on.
-Defaults are safe, not complete.
+### The three switches — only one of them is an input
+
+- **Jira** is genuinely opt-in: `05 - remediate a PR` takes a `jira` input,
+  default `false`, and the settle stage only records an outcome against groups
+  that already carry a ticket key. A PR that never turned Jira on files nothing.
+- **Telegram** notifies whenever `TELEGRAM_BOT_TOKEN` is set on this repo — and
+  it is. **Off means the secret is absent, not an input set to false.** So
+  opening a PR sends one message at the terminal state; that is the designed
+  contract, not noise to suppress.
+- **Auto-merge** is off unless the repo variable `AUTO_MERGE_ENABLED` is `true`.
+  It is **not set**, so `settle` never merges and every merge here is a human or
+  agent action.
 
 ## Derive state, never remember it
 
@@ -181,15 +190,17 @@ not the smells — which is why `settle` exits 0 on red.
   reads or writes `plan.json` carries `concurrency: group: automation-state,
   cancel-in-progress: false`; that is what turns "N group-PRs finish at once"
   from a lost-update race into a FIFO queue.
-- **The demo PR is titled "(do not merge)"** as a signal to humans — but with
-  `auto_merge: true` the demo's own settle stage merges it when the gate is
-  green. Do not "help" by merging it by hand.
+- **The demo PR is titled "(do not merge)"** as a signal to humans, and nothing
+  merges it for you either — `AUTO_MERGE_ENABLED` is unset on this repo. Every
+  merge here is a deliberate human or agent action.
 - **`archive/` is untracked** (`?? archive/` in `git status`) — a full copy of
   the pre-split automation repo (`SonarScanGenesis`). It is not source. Leave it
   alone unless Nick says otherwise; never let it be committed by accident.
-- **Docs here are current**; the stale ones live in the automation repo (Teams vs
-  Telegram, "sandbox repo does not exist yet"). Those two lines have already
-  drifted — trust the code and these workflows over them.
+- **The README's demo narrative is stale about switches**: it describes
+  `telegram_notify` and `auto_merge` as inputs defaulting to `false`. No such
+  inputs exist — see the three switches above. The workflow map is otherwise
+  accurate; the other stale docs live in the automation repo (Teams vs Telegram,
+  "sandbox repo does not exist yet").
 
 ## Where to go deeper
 
