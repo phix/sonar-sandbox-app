@@ -90,7 +90,9 @@ files and published to GitHub Pages:
 | Renderer | [archify](https://github.com/tt-a1i/archify) at pinned `ARCHIFY_SHA` — bumped on purpose, never tracked to HEAD |
 | On a PR | deploys nothing; comments the topology delta against `main` instead |
 
-The automation repo has no Pages site and no workflows.
+The automation repo has no Pages site, and exactly one workflow of its own:
+`sandbox-build.yml`, manual-only, which re-proves the container contract without
+needing a PR.
 
 **The real runtime is GitHub Actions in this repo** — that *is* the deployment.
 Every external surface it reaches:
