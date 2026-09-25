@@ -1,0 +1,14 @@
+# Keep the build context to what the image actually consumes. node_modules is
+# in here on a laptop and is routinely a different architecture from the
+# runner's, which is the failure that makes a Dockerfile work locally and fail
+# in CI for a reason that looks like a source problem.
+node_modules
+**/node_modules
+.git
+.github
+archive
+coverage
+**/coverage
+dist
+**/dist
+*.log

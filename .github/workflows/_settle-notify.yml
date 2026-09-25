@@ -186,12 +186,34 @@ jobs:
           SONAR_ORG: phix
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
+          # Written to its own file, NOT back over jira-findings.json: the
+          # outcome step below needs the unfiltered set, because it speaks for
+          # every group this PR touched, ticketed or not.
           node .automation/jira/filter-findings.mjs jira-findings.json \
-            --fingerprints "${{ steps.ticketed.outputs.fingerprints }}" --out jira-findings.json
-          node .automation/jira/run.mjs jira-findings.json --enabled \
+            --fingerprints "${{ steps.ticketed.outputs.fingerprints }}" \
+            --out jira-findings-ticketed.json
+          node .automation/jira/run.mjs jira-findings-ticketed.json --enabled \
             --plan .state/plan.json --pr "${{ inputs.pr }}" --pr-url "${{ inputs.pr_url }}" \
             --verdict "${{ steps.settle.outputs.state }}" --reason "${{ steps.settle.outputs.reason }}" \
             --json jira-outcome.json
+
+      # The other direction of the back-link: the FINDING learns whether it was
+      # fixed, not just which ticket owns it. Runs whether or not Jira was ever
+      # switched on — this is the Sonar surface, and Sonar is where a reader
+      # asks "is this still a problem?".
+      - name: Record the outcome on the Sonar finding(s)
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          args=""
+          [ -f dispositions.json ] && args="--dispositions dispositions.json"
+          # The findings as remediation saw them, from the remediation run's
+          # artifact. This is what makes the groups the push FIXED addressable:
+          # they are gone from jira-findings.json precisely because it worked.
+          [ -f findings.json ] && args="$args --before findings.json"
+          node .automation/settle/outcome.mjs \
+            --findings jira-findings.json --plan .state/plan.json \
+            $args --pr "${{ inputs.pr }}" --json outcome.json
 
       - uses: ./.github/actions/state-commit
         with:

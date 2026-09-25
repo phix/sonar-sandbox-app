@@ -394,6 +394,19 @@ jobs:
           npm test
           npm run build
 
+      # The app has to BOOT, which is the one thing the suite above cannot
+      # check: the api tests drive Express in-process through supertest and
+      # never execute src/server.js or bind a port. Builds the image, runs it,
+      # and requires /health and /api/orders to answer.
+      #
+      # A gate on the PUSH only. It is NOT proof that any finding is fixed —
+      # that is Sonar's re-scan to say, after the push, not this step's to
+      # assume (sonar-remediation-automation docs/decisions/container-gate.md).
+      - name: Container gate — the built app must boot and serve
+        run: |
+          node .automation/verify/container.mjs --root . \
+            --tag sonar-sandbox-app:gate --json container-gate.json
+
       - name: Commit and push
         id: push
         if: ${{ !inputs.dry_run }}
@@ -410,7 +423,8 @@ jobs:
           # `git status --porcelain` non-empty, so this guard could not
           # actually fire until it excluded them by name.
           SCRATCH=(findings.json ratio.json dispositions.json agentic.json
-                    remediation-comment.md agentic-comment.md)
+                    remediation-comment.md agentic-comment.md
+                    container-gate.json container-gate-comment.md)
           EXCLUDE=()
           for f in "${SCRATCH[@]}"; do EXCLUDE+=(":(exclude)$f"); done
 
@@ -477,6 +491,12 @@ jobs:
             dispositions.json
             ratio.json
             agentic.json
+            # The findings as remediation saw them, BEFORE the fixes. Settle's
+            # outcome write-back needs these Sonar issue keys for exactly the
+            # groups the push fixed: once a fix lands, the finding is gone from
+            # the fresh scan, and this is then the only record of its address.
+            findings.json
+            container-gate.json
           if-no-files-found: warn
           retention-days: 7
 
@@ -497,8 +517,11 @@ jobs:
             // upserted by its own marker: merging them would mean a run that
             // produced only one of the two would silently blank the other.
             const reports = [
-              { file: 'remediation-comment.md', marker: '<!-- sonar-remediation -->' },
-              { file: 'agentic-comment.md',     marker: '<!-- sonar-agentic -->' }
+              { file: 'remediation-comment.md',  marker: '<!-- sonar-remediation -->' },
+              { file: 'agentic-comment.md',      marker: '<!-- sonar-agentic -->' },
+              // Posted because the gate is a new way for this run to be red,
+              // and a red on the PR has to name which check said so.
+              { file: 'container-gate-comment.md', marker: '<!-- sonar-container-gate -->' }
             ];
             let posted = 0;
             for (const { file, marker } of reports) {

@@ -152,7 +152,7 @@
       "sources": [
         {
           "path": ".github/workflows/demo-reset.yml",
-          "line": 15,
+          "line": 22,
           "label": "06 - reset the demo"
         }
       ],
@@ -605,6 +605,13 @@
       "to": "sonar-pr-scan",
       "label": "opens PR",
       "variant": "emphasis"
+    },
+    {
+      "id": "demo-reset--state",
+      "from": "demo-reset",
+      "to": "state",
+      "label": "state-checkout",
+      "variant": "dashed"
     },
     {
       "id": "remediate--file-ticket",
