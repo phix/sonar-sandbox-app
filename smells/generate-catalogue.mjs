@@ -1,114 +1,103 @@
-// Generate smells/catalogue.json from what the local analyzer actually reports.
+// Generate smells/catalogue.json from a real SonarQube scan.
 //
-// The catalogue is the oracle the rest of the pipeline is measured against, so
-// it is derived from observed findings rather than hand-written intent. Writing
-// it by hand invites a transcription error that later reads as a pipeline bug.
+//   node smells/generate-catalogue.mjs --issues <sonar-issues.json>
 //
-//   node smells/generate-catalogue.mjs
-import { ESLint } from 'eslint';
-import { writeFileSync } from 'node:fs';
-import config, { RULE_MAP } from '../eslint.smells.config.mjs';
+// The catalogue is the oracle every downstream assertion is measured against,
+// so it is derived from what SonarQube ACTUALLY REPORTED — not from intent, and
+// not from a local stand-in.
+//
+// It used to be generated from eslint-plugin-sonarjs run locally. That was
+// wrong, and the first real PR scan proved it: the local analyzer reported
+// typescript:S6606 twice where Sonar reported it zero times, and reported none
+// of javascript:S6582, S7737 or S7765 where Sonar found five. A local proxy is
+// a useful pre-flight. It is not the oracle.
+import { readFileSync, writeFileSync } from 'node:fs';
 
-const LOCAL_TO_SONAR = { js: {}, ts: {} };
-for (const [sonarKey, localRule] of Object.entries(RULE_MAP)) {
-  const lang = sonarKey.startsWith('javascript:') ? 'js' : 'ts';
-  LOCAL_TO_SONAR[lang][localRule] = sonarKey;
+const args = Object.fromEntries(
+  process.argv.slice(2).reduce((a, v, i, all) => (v.startsWith('--') && a.push([v.slice(2), all[i + 1]]), a), [])
+);
+if (!args.issues) {
+  console.error('usage: node smells/generate-catalogue.mjs --issues <sonar-issues.json>');
+  process.exit(2);
 }
 
-// Severity as assigned by the default "Sonar way" quality profile. Verified
-// against the live SonarQube Cloud rules API, not assumed:
-//   scripts/verify-rule-keys.sh in phix/sonar-remediation-automation
-const SEVERITY = {
-  'javascript:S1121': 'MAJOR',
-  'javascript:S1128': 'MINOR',
-  'javascript:S1481': 'MINOR',
-  'javascript:S1854': 'MAJOR',
-  'javascript:S2004': 'CRITICAL',
-  'javascript:S3504': 'CRITICAL',
-  'javascript:S3776': 'CRITICAL',
-  'javascript:S4144': 'MAJOR',
-  'typescript:S1128': 'MINOR',
-  'typescript:S3358': 'MAJOR',
-  'typescript:S3504': 'CRITICAL',
-  'typescript:S3776': 'CRITICAL',
-  'typescript:S4144': 'MAJOR',
-  'typescript:S6606': 'MINOR'
-};
-
-// What each rule is planted to prove. `role` drives which branch of the fix
+// What each rule is planted to prove. `role` decides which branch of the fix
 // engine the finding exercises; `fixer` names the deterministic codemod where
-// one is possible.
+// one is possible. A rule absent from here is a finding nobody classified yet,
+// which is a failure — the catalogue must not silently absorb the unknown.
 const ROLE = {
-  S1121: ['non_automatable', null, 'Trivially fixable by codemod, and refused anyway because it sits in api/src/auth/. Proves eligibility refuses by location and risk, not by difficulty.'],
-  S1128: ['codemod_fixable', 'remove-unused-import', 'The cheapest possible deterministic fix: delete the import specifier.'],
-  S1481: ['codemod_fixable', 'remove-unused-variable', 'Deterministic deletion of a declaration nothing reads.'],
-  S1854: ['codemod_fixable', 'remove-dead-store', 'Deterministic deletion of an assignment whose value is never read.'],
-  S2004: ['non_automatable', null, 'Untangling a callback pyramid in session handling is a behavioural rewrite in a security-sensitive path. Must escalate, never patch.'],
-  S3358: ['claude_fallback', null, 'Extracting a nested ternary requires naming the intermediate concept, which is a judgement call rather than a rewrite rule.'],
-  S3504: ['codemod_fixable', 'var-to-const', 'Mechanical: a module-scope var never reassigned becomes const.'],
-  S3776: ['claude_fallback', null, 'Reducing cognitive complexity means restructuring control flow while preserving behaviour. No mechanical fixer exists.'],
-  S4144: ['claude_fallback', null, 'Deduplicating two identical functions requires deciding which name survives and updating callers.'],
-  S6606: ['codemod_fixable', 'or-to-nullish-coalescing', 'Mechanical `||` to `??` rewrite, guarded by the nullable type that triggered it.']
+  'javascript:S1121': ['non_automatable', null, 'Trivially fixable by codemod, and refused anyway because it sits in api/src/auth/. Proves eligibility refuses by location and risk, not by difficulty.'],
+  'javascript:S2004': ['non_automatable', null, 'Untangling a callback pyramid in session handling is a behavioural rewrite in a security-sensitive path. Must escalate, never patch.'],
+  'javascript:S1128': ['codemod_fixable', 'remove-unused-import', 'The cheapest possible deterministic fix: delete the import specifier.'],
+  'typescript:S1128': ['codemod_fixable', 'remove-unused-import', 'The cheapest possible deterministic fix: delete the import specifier.'],
+  'javascript:S1481': ['codemod_fixable', 'remove-unused-variable', 'Deterministic deletion of a declaration nothing reads.'],
+  'javascript:S1854': ['codemod_fixable', 'remove-dead-store', 'Deterministic deletion of an assignment whose value is never read.'],
+  'javascript:S3504': ['codemod_fixable', 'var-to-const', 'Mechanical: a module-scope var never reassigned becomes const.'],
+  'typescript:S3504': ['codemod_fixable', 'var-to-const', 'Mechanical: a module-scope var never reassigned becomes const.'],
+  'javascript:S6582': ['codemod_fixable', 'to-optional-chain', 'Mechanical `a && a.b` to `a?.b` rewrite. Not planted deliberately — found by the first real scan in code written for other smells, and kept because it fires reliably.'],
+  'javascript:S7765': ['codemod_fixable', 'some-to-includes', 'Mechanical `.some(x => x === v)` to `.includes(v)`. Surfaced by the first real scan rather than planted.'],
+  'javascript:S7737': ['claude_fallback', null, 'Replacing an object-literal default parameter changes call semantics; the safe rewrite depends on how callers use it.'],
+  'javascript:S3776': ['claude_fallback', null, 'Reducing cognitive complexity means restructuring control flow while preserving behaviour. No mechanical fixer exists.'],
+  'typescript:S3776': ['claude_fallback', null, 'Reducing cognitive complexity means restructuring control flow while preserving behaviour. No mechanical fixer exists.'],
+  'javascript:S4144': ['claude_fallback', null, 'Deduplicating two identical functions requires deciding which name survives and updating callers.'],
+  'typescript:S4144': ['claude_fallback', null, 'Deduplicating two identical functions requires deciding which name survives and updating callers.'],
+  'typescript:S3358': ['claude_fallback', null, 'Extracting a nested ternary requires naming the intermediate concept, which is a judgement call rather than a rewrite rule.']
 };
 
-// Rules SonarQube implements but the standalone SonarJS ESLint plugin does not
-// re-export. The stand-in has the same intent; treat a local match as strong
-// evidence rather than proof, and let the first real scan confirm.
-const PROXY_RULES = new Set(['javascript:S3504', 'typescript:S3504', 'typescript:S6606']);
+const raw = JSON.parse(readFileSync(args.issues, 'utf8'));
+const issues = (Array.isArray(raw) ? raw : [raw]).flatMap((p) => p.issues || []);
+if (!issues.length) {
+  console.error('no issues in the scan payload — refusing to write an empty catalogue');
+  process.exit(1);
+}
 
-const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: config });
-const results = await eslint.lintFiles(['api/src', 'web/src']);
+const filePath = (component) => component.slice(component.indexOf(':') + 1);
+const unclassified = [...new Set(issues.map((i) => i.rule))].filter((r) => !ROLE[r]);
+if (unclassified.length) {
+  console.error(`unclassified rule(s): ${unclassified.join(', ')}`);
+  console.error('add them to ROLE with a role and a reason, or exclude them in sonar-project.properties.');
+  process.exit(1);
+}
 
-const smells = [];
-for (const result of results.sort((a, b) => a.filePath.localeCompare(b.filePath))) {
-  const file = result.filePath.replace(`${process.cwd()}/`, '');
-  const lang = file.startsWith('api/') ? 'js' : 'ts';
-  for (const m of result.messages.sort((a, b) => a.line - b.line || a.column - b.column)) {
-    const sonarKey = LOCAL_TO_SONAR[lang][m.ruleId];
-    if (!sonarKey) throw new Error(`unmapped local rule ${m.ruleId} at ${file}:${m.line}`);
-    const short = sonarKey.split(':')[1];
-    const [role, fixer, why] = ROLE[short];
-    smells.push({
+const smells = issues
+  .map((i) => {
+    const [role, fixer, why] = ROLE[i.rule];
+    const file = filePath(i.component);
+    return {
       id: '',
       file,
-      line_hint: m.line,
+      line_hint: i.line ?? null,
       module_prefix: file.split('/')[0],
-      sonar_rule_key: sonarKey,
-      expected_severity: SEVERITY[sonarKey],
+      sonar_rule_key: i.rule,
+      expected_severity: i.severity,
+      // Fingerprint on the content hash, not the line — a deliberate deviation
+      // from spec §8.1, since line numbers shift on unrelated edits above.
+      finding_fingerprint: `${i.rule}|${file}|${i.hash ?? `line:${i.line}`}`,
       role,
       fixer,
-      why_planted: why,
-      local_rule: m.ruleId,
-      local_rule_is_proxy: PROXY_RULES.has(sonarKey)
-    });
-  }
-}
+      why_planted: why
+    };
+  })
+  .sort((a, b) => a.file.localeCompare(b.file) || (a.line_hint ?? 0) - (b.line_hint ?? 0) || a.sonar_rule_key.localeCompare(b.sonar_rule_key));
+
 smells.forEach((s, i) => { s.id = `smell-${String(i + 1).padStart(3, '0')}`; });
 
-const byRole = smells.reduce((acc, s) => ({ ...acc, [s.role]: (acc[s.role] || 0) + 1 }), {});
+const byRole = smells.reduce((a, s) => ({ ...a, [s.role]: (a[s.role] || 0) + 1 }), {});
 const groups = {};
 for (const s of smells) {
-  const key = `${s.module_prefix}|${s.sonar_rule_key}|${s.expected_severity}`;
-  groups[key] = (groups[key] || 0) + 1;
+  const k = `${s.module_prefix}|${s.sonar_rule_key}|${s.expected_severity}`;
+  groups[k] = (groups[k] || 0) + 1;
 }
 
-writeFileSync(
-  'smells/catalogue.json',
-  JSON.stringify(
-    {
-      $comment:
-        'Oracle for the remediation pipeline. Generated by smells/generate-catalogue.mjs from findings the analyzer actually reported — never hand-edited. Rule keys and severities verified against the live SonarQube Cloud rules API for the default Sonar way profile.',
-      generated_by: 'smells/generate-catalogue.mjs',
-      repository: 'phix/sonar-sandbox-app',
-      grouping_note:
-        'group = module_prefix + sonar_rule_key + expected_severity, matching the plan grouping strategy in the architecture spec §9.',
-      totals: { findings: smells.length, by_role: byRole, groups: Object.keys(groups).length },
-      group_sizes: groups,
-      smells
-    },
-    null,
-    2
-  ) + '\n'
-);
+writeFileSync('smells/catalogue.json', JSON.stringify({
+  $comment: 'Oracle for the remediation pipeline. Generated from a real SonarQube PR scan by smells/generate-catalogue.mjs — never hand-edited, and never derived from the local ESLint stand-in, which disagrees with Sonar.',
+  generated_by: 'smells/generate-catalogue.mjs --issues <sonar-issues.json>',
+  repository: 'phix/sonar-sandbox-app',
+  grouping_note: 'group = module_prefix + sonar_rule_key + expected_severity, matching the plan grouping strategy in architecture spec §9.',
+  totals: { findings: smells.length, by_role: byRole, groups: Object.keys(groups).length },
+  group_sizes: groups,
+  smells
+}, null, 2) + '\n');
+
 console.log(`wrote smells/catalogue.json — ${smells.length} findings, ${Object.keys(groups).length} groups`);
 console.log('by role:', byRole);
