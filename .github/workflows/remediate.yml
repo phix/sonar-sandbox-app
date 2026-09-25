@@ -384,12 +384,23 @@ jobs:
           node .automation/codemods/agentic/run.mjs findings.json --root . \
             --max-findings 2 --max-attempts 2 --json agentic.json
 
+      # `if: always()` is load-bearing, not belt-and-braces. The tinman check
+      # above is a HARD failure by design, so without this an unreachable LLM
+      # endpoint also skips the verification of the codemod fixes that already
+      # landed — one outage, two unrelated consequences, and the second one
+      # silent. Proven by run 36090501802 (2026-09-25): tinman was powered off,
+      # and both this step and the container gate below were skipped rather
+      # than attempted. The run still fails; it just fails having also told you
+      # whether the code it did change is sound. A gate an earlier unrelated
+      # failure can skip is not a gate.
+      #
       # `npm test`, not `test:coverage`. This job checks out the PR head branch
       # as it really is, and that branch predates every script main has gained
       # since it was cut — test:coverage is simply not there. Coverage is the
       # scan's business anyway: sonar-pr-scan runs on the merge ref, where
       # main's coverage config is present.
       - name: Test and build — a red suite pushes nothing
+        if: always()
         run: |
           npm test
           npm run build
@@ -403,6 +414,7 @@ jobs:
       # that is Sonar's re-scan to say, after the push, not this step's to
       # assume (sonar-remediation-automation docs/decisions/container-gate.md).
       - name: Container gate — the built app must boot and serve
+        if: always()
         run: |
           node .automation/verify/container.mjs --root . \
             --tag sonar-sandbox-app:gate --json container-gate.json
