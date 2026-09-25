@@ -148,7 +148,7 @@
     {
       "from": "demo-reset",
       "to": "sonar-pr-scan",
-      "label": "force-push → re-scan",
+      "label": "force-push → re-scan, or dispatch if the ref did not move",
       "variant": "dashed"
     },
     {

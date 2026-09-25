@@ -641,14 +641,6 @@
       "variant": "emphasis"
     },
     {
-      "id": "demo-reset--sonar-pr-scan",
-      "from": "demo-reset",
-      "to": "sonar-pr-scan",
-      "label": "gh workflow run",
-      "fromSide": "left",
-      "toSide": "left"
-    },
-    {
       "id": "demo-reset--state",
       "from": "demo-reset",
       "to": "state",
@@ -717,7 +709,7 @@
       "id": "demo-reset--sonar-pr-scan",
       "from": "demo-reset",
       "to": "sonar-pr-scan",
-      "label": "force-push → re-scan",
+      "label": "force-push → re-scan, or dispatch if the ref did not move",
       "variant": "dashed",
       "fromSide": "left",
       "toSide": "left"

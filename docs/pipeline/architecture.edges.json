@@ -20,7 +20,6 @@
     "demo-create-pr->demo-baseline": ".github/workflows/demo-create-pr.yml:58",
     "demo-create-pr->sonar-pr-scan": ".github/workflows/demo-create-pr.yml:72",
     "demo-reset->demo-baseline": ".github/workflows/demo-reset.yml:63",
-    "demo-reset->sonar-pr-scan": "manual.json",
     "demo-reset->state": ".github/workflows/demo-reset.yml:285",
     "remediate->file-ticket": ".github/workflows/remediate.yml:132",
     "remediate->tailscale": ".github/workflows/remediate.yml:273",
@@ -29,6 +28,7 @@
     "tinman-health-check->tailscale": ".github/workflows/tinman-health-check.yml:45",
     "remediate->sonar-remediation-automation": "manual.json",
     "remediate->sonar-pr-scan": "manual.json",
+    "demo-reset->sonar-pr-scan": "manual.json",
     "sonar-pr-scan->app": "manual.json",
     "tailscale->tinman": "manual.json"
   },

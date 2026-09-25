@@ -67,6 +67,31 @@ test('a node with no layout entry fails, naming it', () => {
   assert.throws(() => generate({ repoRoot, manual, layout: partial, revision }), /no layout entry for: jira/);
 });
 
+test('no two connections share an id — the renderer rejects duplicates outright', () => {
+  // The id scheme is `${from}--${to}` and `archify validate` fails hard on a
+  // duplicate: `/connections/N/id duplicates relationship id "…"`. One edge per
+  // ordered pair is therefore a contract, not a preference. It broke on
+  // 2026-09-25 when 06 gained a `gh workflow run` to 02, colliding with the
+  // hand-authored "force-push → re-scan" edge for the same pair.
+  const ids = ir.connections.map((c) => c.id);
+  const dupes = [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))];
+  assert.deepEqual(dupes, [], `duplicate connection ids: ${dupes.join(', ')}`);
+});
+
+test('a manual connection OVERRIDES the generated one rather than joining it', () => {
+  const override = {
+    ...manual,
+    connections: [
+      ...(manual.connections ?? []).filter((c) => !(c.from === 'demo-reset' && c.to === 'sonar-pr-scan')),
+      { from: 'demo-reset', to: 'sonar-pr-scan', label: 'override wins' },
+    ],
+  };
+  const out = generate({ repoRoot, manual: override, layout, revision });
+  const pair = out.connections.filter((c) => c.from === 'demo-reset' && c.to === 'sonar-pr-scan');
+  assert.equal(pair.length, 1, 'exactly one edge per ordered pair');
+  assert.equal(pair[0].label, 'override wins');
+});
+
 test('the PR comment summarises a receipt and copes without one', () => {
   const md = render(
     {
