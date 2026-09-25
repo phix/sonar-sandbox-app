@@ -5,8 +5,8 @@ import { VALID_STATUSES } from '../services/order-service.js';
  * which is why the shapes below rhyme with each other.
  */
 
-var CURRENCY_SCALE = 100;
-var DEFAULT_WINDOW_DAYS = 30;
+let CURRENCY_SCALE = 100;
+let DEFAULT_WINDOW_DAYS = 30;
 
 /** Orders the warehouse still has to act on. */
 export function countOpen(orders) {
