@@ -607,6 +607,18 @@ jobs:
             // They stay separate rather than concatenated because each is
             // upserted by its own marker: merging them would mean a run that
             // produced only one of the two would silently blank the other.
+            // A DRY RUN MUST NOT READ LIKE A REAL ONE. These comments are
+            // upserted, so a rehearsal's body would otherwise sit on the PR
+            // looking exactly like a pass that pushed — and a rehearsal on the
+            // demo PR is a normal thing to do. Labelled rather than suppressed:
+            // the report is the only place the named agentic skip appears on the
+            // PR, so suppressing it would hide the diagnostic the skip exists to
+            // provide.
+            const banner = '${{ inputs.dry_run }}' === 'true'
+              ? '> **Dry run — nothing was pushed and no branch was changed.** '
+                + 'This is what the pass would have reported.\n\n'
+              : '';
+
             const reports = [
               { file: 'remediation-comment.md',  marker: '<!-- sonar-remediation -->' },
               { file: 'agentic-comment.md',      marker: '<!-- sonar-agentic -->' },
@@ -617,7 +629,7 @@ jobs:
             let posted = 0;
             for (const { file, marker } of reports) {
               if (!fs.existsSync(file)) continue;
-              const body = fs.readFileSync(file, 'utf8');
+              const body = banner + fs.readFileSync(file, 'utf8');
               const mine = all.find((c) => c.body && c.body.includes(marker));
               if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
               else await github.rest.issues.createComment({ owner, repo, issue_number, body });
