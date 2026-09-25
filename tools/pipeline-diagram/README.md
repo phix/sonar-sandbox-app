@@ -18,13 +18,13 @@ that was rendered.
 | `layout.json` | Geometry only: `nodes` → `pos`/`size`; `edges` → sides, `via`, `labelAt`. |
 | `pr-comment.mjs` | Renders an `archify compare` receipt as the PR comment. |
 | `docs/pipeline/architecture.json` | The committed output. CI fails if it drifts from the workflows. |
-| `docs/pipeline/architecture.edges.json` | Sidecar: which line each edge came from, and which edges were folded. |
+| `docs/pipeline/architecture.edges.json` | Sidecar: which line each edge came from, and which edges were folded. **Also checked** — `split()` moves every edge's `path:line` pin out of the IR and into here, so an IR-only comparison cannot see an edge line move. |
 
 ## Day to day
 
 ```bash
-npm run diagram            # regenerate docs/pipeline/architecture.json
-npm run diagram:check      # what CI runs: is the committed IR still current?
+npm run diagram            # regenerate docs/pipeline/architecture.json (and the sidecar)
+npm run diagram:check      # what CI runs: are BOTH committed artifacts still current?
 npm run test:diagram
 ```
 

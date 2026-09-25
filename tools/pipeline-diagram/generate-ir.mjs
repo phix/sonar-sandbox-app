@@ -281,6 +281,39 @@ function split(ir) {
   return { ir, sidecar: { edges, folded } };
 }
 
+export const IR_NAME = 'architecture.json';
+export const SIDECAR_NAME = 'architecture.edges.json';
+
+/**
+ * Which committed artifacts no longer match a fresh generation.
+ *
+ * THE SIDECAR HAS TO BE COMPARED SEPARATELY, and not comparing it was a real
+ * gap. `split()` moves every edge's `_evidence` OUT of the IR and into the
+ * sidecar — so once split, the IR contains no edge line number at all. A check
+ * that compares only the IR therefore cannot see an edge's `path:line` pin
+ * move, which is precisely what the sidecar is documented to hold.
+ *
+ * Measured 2026-09-25: PR #45 added 19 lines to `sonar-pr-scan.yml`, shifting
+ * `sonar-pr-scan->settle-notify` from 220 to 239. The sidecar drifted, the CI
+ * check said "up to date", and it stayed stale through two more merges. A
+ * blank-line insertion above that `uses:` still reports "up to date" against
+ * an IR-only comparison.
+ *
+ * So: an IR-only check guards node pins and silently ignores every edge pin.
+ * Both files are now compared, and this function exists so the behaviour is
+ * testable without spawning the CLI.
+ *
+ * The generated revision is still ignored — it changes on every commit by
+ * design, and the wiring does not.
+ */
+export function staleArtifacts({ committedIr, generatedIr, committedSidecar, generatedSidecar }) {
+  const strip = (x) => JSON.stringify({ ...x, meta: { ...x.meta, repository: undefined } });
+  const stale = [];
+  if (strip(committedIr) !== strip(generatedIr)) stale.push(IR_NAME);
+  if (JSON.stringify(committedSidecar) !== JSON.stringify(generatedSidecar)) stale.push(SIDECAR_NAME);
+  return stale;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const opt = (flag, dflt) => {
@@ -297,12 +330,18 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const layout = JSON.parse(readFileSync(join(here, 'layout.json'), 'utf8'));
   const { ir, sidecar } = split(generate({ repoRoot, manual, layout, revision }));
   if (args.includes('--check')) {
-    // Is the committed IR still what the workflows say? Revision is ignored:
-    // it changes every commit, the wiring does not.
-    const strip = (x) => JSON.stringify({ ...x, meta: { ...x.meta, repository: undefined } });
-    const committed = JSON.parse(readFileSync(out, 'utf8'));
-    if (strip(committed) !== strip(ir)) {
-      console.error(`${out} is stale — run \`npm run diagram\` and commit the result.`);
+    // Is the committed IR — and its sidecar — still what the workflows say?
+    const sidecarPath = out.replace(/\.json$/, '.edges.json');
+    const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
+    const stale = staleArtifacts({
+      committedIr: read(out),
+      generatedIr: ir,
+      committedSidecar: read(sidecarPath),
+      generatedSidecar: sidecar
+    });
+    if (stale.length) {
+      const named = stale.map((n) => join(dirname(out), n)).join(' and ');
+      console.error(`${named} ${stale.length === 1 ? 'is' : 'are'} stale — run \`npm run diagram\` and commit the result.`);
       process.exit(1);
     }
     console.log(`${out} is up to date.`);
