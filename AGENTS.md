@@ -190,8 +190,13 @@ npm run test:coverage # what the gate needs; lcov paths are normalised by
                       # .github/scripts/normalize-lcov.mjs — a bad SF: path fails
                       # the build instead of silently reporting 0%
 npm run test:scripts  # pr-gate unit tests
-npm run smells:verify # catalogue still matches a real scan
-npm run smells:generate
+npm run smells:verify # local PRE-FLIGHT: does the tree still match the catalogue?
+                      # Not the oracle — it sees only the rules the standalone plugin
+                      # implements, and reports how many it skipped.
+npm run smells:generate -- --issues <sonar-issues.json>
+                      # Regenerate the catalogue from a REAL Sonar scan, which is the
+                      # oracle. The local proxy disagreed with Sonar in both directions,
+                      # so it no longer generates this.
 npm run diagram:check # the diagram is stale vs the workflow files
 npm run build
 ```

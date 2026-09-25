@@ -61,7 +61,10 @@ plant would report phantom "unexpected" findings at the scan gate.
 
 ```bash
 npm run smells:verify      # does the tree still match the catalogue?
-npm run smells:generate    # regenerate the catalogue from observed findings
+npm run smells:generate -- --issues <sonar-issues.json>
+                           # regenerate the catalogue from what a REAL Sonar scan
+                           # reported. It used to run the local analyzer, which was
+                           # wrong: the proxy disagreed with Sonar in both directions.
 ```
 
 `smells:verify` is a **pre-flight** version of the first-scan gate: it diffs
