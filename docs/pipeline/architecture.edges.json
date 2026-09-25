@@ -18,7 +18,7 @@
     "auto-continue-watch->state": ".github/workflows/auto-continue-watch.yml:83",
     "auto-continue-watch->remediate": ".github/workflows/auto-continue-watch.yml:96",
     "demo-create-pr->sonar-pr-scan": ".github/workflows/demo-create-pr.yml:70",
-    "demo-reset->state": ".github/workflows/demo-reset.yml:238",
+    "demo-reset->state": ".github/workflows/demo-reset.yml:271",
     "remediate->file-ticket": ".github/workflows/remediate.yml:132",
     "remediate->tailscale": ".github/workflows/remediate.yml:259",
     "sonar-pr-scan->settle-notify": ".github/workflows/sonar-pr-scan.yml:220",
