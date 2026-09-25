@@ -20,7 +20,7 @@
     "demo-create-pr->demo-baseline": ".github/workflows/demo-create-pr.yml:58",
     "demo-create-pr->sonar-pr-scan": ".github/workflows/demo-create-pr.yml:72",
     "demo-reset->demo-baseline": ".github/workflows/demo-reset.yml:63",
-    "demo-reset->state": ".github/workflows/demo-reset.yml:298",
+    "demo-reset->state": ".github/workflows/demo-reset.yml:294",
     "remediate->file-ticket": ".github/workflows/remediate.yml:132",
     "remediate->tailscale": ".github/workflows/remediate.yml:273",
     "sonar-pr-scan->settle-notify": ".github/workflows/sonar-pr-scan.yml:239",
@@ -33,7 +33,6 @@
     "tailscale->tinman": "manual.json"
   },
   "folded": {
-    "sonar-pr-scan->sonar-remediation-automation": "drawn from settle-notify",
     "sonar-pr-scan->sonarcloud": "drawn from settle-notify",
     "remediate->sonarcloud": "drawn from file-ticket",
     "remediate->sonar-remediation-automation": "drawn from file-ticket",
