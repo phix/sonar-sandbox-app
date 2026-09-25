@@ -256,72 +256,78 @@ jobs:
       # route to. This joins the tailnet so the name resolves. Ephemeral and
       # tagged: the node disappears when the job ends rather than accumulating
       # dead machines in the tailnet.
+      # THE AGENTIC PATH IS OPTIONAL NOW (Nick, 2026-09-25: tinman "isn't part
+      # of this anymore"). An endpoint that does not answer no longer kills the
+      # run. The codemod fixes are already applied by the time execution gets
+      # here, and the suite, the container gate and the push are all independent
+      # of the model — so failing here used to take every one of those down with
+      # it, and a retired endpoint meant the pipeline could not remediate at
+      # all, codemod-only or otherwise.
+      #
+      # OPTIONAL MUST NOT MEAN SILENT. The findings that needed the model are
+      # NAMED as not attempted, in the PR report the step below writes — the
+      # same discipline as a policy refusal, which is also named rather than
+      # quietly dropped. A codemod-only pass must never be mistakable for an
+      # exhaustive one, and the verdict on the PR is still whatever the re-scan
+      # says, so a green job here is not a green gate.
       - name: Join the tailnet
+        continue-on-error: true
         uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      # tailscale/github-action reports outcome=success after exhausting ALL
-      # its retries. Run 33342014303 failed `tailscale up` five times with
-      # "backend error: invalid key: unable to validate API key" and the step
-      # still went green -- so the first thing anyone saw was a DNS error in
-      # run 1 and a connection timeout in run 2, both of which are what "there
-      # is no tailnet" looks like from one step downstream. Two wrong
-      # diagnoses came out of trusting that green.
+      # ONE decision point for "can we reach the model", and it never fails the
+      # job. It carries both diagnoses that used to be separate hard steps,
+      # because each is worth naming when the answer is no:
       #
-      # So the join is asserted here rather than believed. This is cheap and it
-      # converts a silent no-op into a named failure at the step that caused it.
-      - name: Assert the tailnet actually came up
+      # - tailscale/github-action reports outcome=success after exhausting ALL
+      #   its retries. Run 33342014303 failed `tailscale up` five times with
+      #   "backend error: invalid key: unable to validate API key" and the step
+      #   still went green — so the tailnet is asserted here, not believed.
+      # - The tailnet IP, not the name `tinman`. Run 33341811392 died in 16ms on
+      #   `curl: (6) Could not resolve host: tinman`: the action brings the node
+      #   up with `--accept-routes` and never `--accept-dns`, so MagicDNS does
+      #   not apply on an ephemeral runner. A tailnet IP needs no resolver.
+      - name: Check whether the agentic endpoint is reachable
+        id: tinman
+        continue-on-error: true
+        env:
+          LLM_BASE_URL: http://100.102.1.50:11434/v1
         run: |
           state=$(tailscale status --json 2>/dev/null | node -e "
             let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
               try{console.log(JSON.parse(s).BackendState||'NoState')}catch{console.log('Unreadable')}})")
           echo "tailscale BackendState: $state"
+
           if [ "$state" != "Running" ]; then
-            echo "::error title=Tailnet did not come up::tailscale up did not connect (BackendState=$state), but tailscale/github-action still reported success. Check the OAuth client: it needs the auth_keys scope AND must carry tag:ci, and tag:ci must exist in tagOwners. 'invalid key: unable to validate API key' in the join step means the credential itself was rejected, not that the ACL blocked anything."
-            exit 1
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Tailnet did not come up::tailscale up did not connect (BackendState=$state) even though tailscale/github-action reported success. Check the OAuth client: it needs the auth_keys scope AND must carry tag:ci, and tag:ci must exist in tagOwners. 'invalid key: unable to validate API key' means the credential was rejected, not that the ACL blocked anything. Carrying on codemod-only."
+            exit 0
           fi
           tailscale status | sed -n '1,20p'
 
-      # The tailnet IP, not the name `tinman`. Proven necessary by run
-      # 33341811392: the tailnet came up, and the probe died in 16ms on
-      # `curl: (6) Could not resolve host: tinman`. tailscale/github-action
-      # brings the node up with `--accept-routes` and never passes
-      # `--accept-dns`, so MagicDNS does not apply on an ephemeral runner --
-      # the name resolves from a laptop that has it and nowhere in CI. A
-      # tailnet IP is stable for the life of the node and needs no resolver.
-      #
-      # If this ever fails with a connection error rather than a DNS error,
-      # suspect tinman was removed and re-added to the tailnet and got a new
-      # 100.x address; `tailscale status` prints the current one.
-      #
-      # Proves the route BEFORE the model call, so an unreachable endpoint is
-      # reported as an unreachable endpoint rather than as a model failure.
-      # These are two different problems with two different owners, and the
-      # agentic client cannot tell them apart from the far side of a socket.
-      - name: Prove tinman is reachable
-        run: |
-          if ! curl -sS -m 10 -o /dev/null -w 'GET /v1/models -> %{http_code}\n' \
+          if curl -sS -m 10 -o /dev/null -w 'GET /v1/models -> %{http_code}\n' \
                "${LLM_BASE_URL}/models"; then
-            echo "::error title=tinman unreachable::The tailnet came up but ${LLM_BASE_URL} did not answer. Check that tinman is powered on, that tag:ci is permitted to reach it in the ACL, that its tailnet IP has not changed, and that Ollama binds beyond loopback (OLLAMA_HOST=0.0.0.0:11434 on tinman itself)."
-            exit 1
+            echo "reachable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=agentic endpoint unreachable::The tailnet came up but ${LLM_BASE_URL} did not answer. Check that tinman is powered on, that tag:ci is permitted to reach it in the ACL, that its tailnet IP has not changed, and that Ollama binds beyond loopback (OLLAMA_HOST=0.0.0.0:11434 on tinman itself). Carrying on codemod-only; the findings that needed the model are named in the PR report."
           fi
-        env:
-          LLM_BASE_URL: http://100.102.1.50:11434/v1
 
       # Only findings no codemod can handle reach this. It writes its fixes into
       # the tree, so the existing test/build/push steps below cover them without
       # a second push path.
       #
-      # Unconfigured EXITS 1 and fails the job -- run.mjs:86 is deliberate about
-      # that: "a pipeline that quietly skipped its only model-backed stage would
-      # report the same green as one that ran it". It still writes
-      # agentic-comment.md first, so the PR says which findings were left open
-      # and why. Since LLM_BASE_URL and LLM_MODEL are pinned below, that path is
-      # only reachable if this block is edited wrongly -- which is the point.
+      # Runs only when the endpoint answered. Unconfigured still EXITS 1 and
+      # fails the job -- run.mjs:86 is deliberate about that: "a pipeline that
+      # quietly skipped its only model-backed stage would report the same green
+      # as one that ran it". That guard stays; what changed is that an
+      # unreachable endpoint is now caught before the call, named, and skipped,
+      # rather than taking the whole pass down with it.
       - name: Agentic remediation
+        if: steps.tinman.outputs.reachable == 'true'
         # A hard ceiling, independent of any budget arithmetic inside the tool.
         # With headerTimeoutMs at 180s the nested retries multiply: findings x
         # proposal attempts x LLM attempts x 180s reached THREE HOURS at ten
@@ -384,15 +390,39 @@ jobs:
           node .automation/codemods/agentic/run.mjs findings.json --root . \
             --max-findings 2 --max-attempts 2 --json agentic.json
 
-      # `if: always()` is load-bearing, not belt-and-braces. The tinman check
-      # above is a HARD failure by design, so without this an unreachable LLM
-      # endpoint also skips the verification of the codemod fixes that already
-      # landed — one outage, two unrelated consequences, and the second one
-      # silent. Proven by run 36090501802 (2026-09-25): tinman was powered off,
-      # and both this step and the container gate below were skipped rather
-      # than attempted. The run still fails; it just fails having also told you
-      # whether the code it did change is sound. A gate an earlier unrelated
-      # failure can skip is not a gate.
+      # The half that makes "optional" honest. When the endpoint did not answer,
+      # the findings that needed the model are NAMED here, in the same
+      # `<!-- sonar-agentic -->` comment the report step already upserts — so a
+      # codemod-only pass says out loud what it did not do, and cannot be read as
+      # an exhaustive one. Writing the report file rather than a fresh comment is
+      # deliberate: one marker, one comment, whichever path produced it.
+      - name: Name the findings an unreachable endpoint left unattempted
+        if: steps.tinman.outputs.reachable != 'true'
+        run: |
+          node -e "
+            const fs = require('fs');
+            let needs = [];
+            try { needs = require('./dispositions.json').needsAgent || []; } catch { /* no record */ }
+            const l = ['<!-- sonar-agentic -->', '### Agentic path: NOT RUN', ''];
+            l.push('The model endpoint did not answer, so the findings below were **not attempted**.');
+            l.push('Everything else in this pass ran normally: codemods, the test suite, the container gate.');
+            l.push('');
+            if (needs.length) for (const f of needs) l.push('- \`' + f.rule + '\` at \`' + f.file + ':' + f.line + '\`');
+            else l.push('No finding in this pass needed the model.');
+            l.push('');
+            l.push('These are not failures. They are work the endpoint was not there to do, named so that a codemod-only pass is never mistaken for a complete one.');
+            fs.writeFileSync('agentic-comment.md', l.join('\n'));
+            console.log('named ' + needs.length + ' finding(s) left unattempted');
+          "
+
+      # `if: always()` is load-bearing, not belt-and-braces: any earlier failure
+      # must not also hide whether the code that WAS changed is sound. Proven by
+      # run 36090501802 (2026-09-25), when a hard tinman failure skipped both
+      # this step and the container gate below rather than attempting them — one
+      # outage, two unrelated consequences, and the second one silent. The
+      # endpoint no longer fails the job, but the attempt cap, the codemod step
+      # and the checkout still can, and the same argument holds for each of
+      # them. A gate an earlier unrelated failure can skip is not a gate.
       #
       # `npm test`, not `test:coverage`. This job checks out the PR head branch
       # as it really is, and that branch predates every script main has gained
