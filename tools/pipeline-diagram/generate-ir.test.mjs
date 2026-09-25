@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generate } from './generate-ir.mjs';
+import { generate, staleArtifacts, IR_NAME, SIDECAR_NAME } from './generate-ir.mjs';
 import { render } from './pr-comment.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -79,4 +79,67 @@ test('the PR comment summarises a receipt and copes without one', () => {
   assert.match(md, /nodes: 1 added · edges: 2 removed/);
   assert.match(md, /\| node \| `x` \| added \|/);
   assert.match(render(null, { runUrl: 'https://run' }), /nothing to diff/);
+});
+
+// The committed artifacts the CI check guards. An IR-only comparison was a real
+// gap: split() moves each edge's `path:line` pin into the sidecar, so the IR is
+// structurally incapable of showing an edge line moving — see staleArtifacts.
+test('an unchanged generation is not stale', () => {
+  const irA = { components: [], connections: [], meta: { repository: { revision: 'a'.repeat(40) } } };
+  const side = { edges: { 'a->b': 'x.yml:1' }, folded: [] };
+  assert.deepEqual(
+    staleArtifacts({
+      committedIr: structuredClone(irA), generatedIr: structuredClone(irA),
+      committedSidecar: structuredClone(side), generatedSidecar: structuredClone(side),
+    }),
+    [],
+  );
+});
+
+test('a new revision alone is never stale — it changes on every commit', () => {
+  const at = (rev) => ({ components: [], connections: [], meta: { repository: { revision: rev } } });
+  const side = { edges: {}, folded: [] };
+  assert.deepEqual(
+    staleArtifacts({
+      committedIr: at('0'.repeat(40)), generatedIr: at('a'.repeat(40)),
+      committedSidecar: side, generatedSidecar: side,
+    }),
+    [],
+  );
+});
+
+test('a moved node pin is stale', () => {
+  const at = (line) => ({ components: [{ id: 'n', sources: [{ path: 'w.yml', line }] }], connections: [], meta: {} });
+  const side = { edges: {}, folded: [] };
+  assert.deepEqual(
+    staleArtifacts({ committedIr: at(10), generatedIr: at(20), committedSidecar: side, generatedSidecar: side }),
+    [IR_NAME],
+  );
+});
+
+test('a moved EDGE pin is stale, even though the IR is byte-identical', () => {
+  // The regression this guards. PR #45 shifted sonar-pr-scan.yml by 19 lines,
+  // the sidecar drifted, and the IR-only check reported "up to date" through
+  // two more merges.
+  const ir = { components: [], connections: [], meta: {} };
+  assert.deepEqual(
+    staleArtifacts({
+      committedIr: structuredClone(ir), generatedIr: structuredClone(ir),
+      committedSidecar: { edges: { 'a->b': 'w.yml:220' }, folded: [] },
+      generatedSidecar: { edges: { 'a->b': 'w.yml:239' }, folded: [] },
+    }),
+    [SIDECAR_NAME],
+  );
+});
+
+test('both stale is reported as both, not as the first one found', () => {
+  const at = (line) => ({ components: [{ id: 'n', sources: [{ path: 'w.yml', line }] }], connections: [], meta: {} });
+  assert.deepEqual(
+    staleArtifacts({
+      committedIr: at(10), generatedIr: at(20),
+      committedSidecar: { edges: { 'a->b': 'w.yml:1' }, folded: [] },
+      generatedSidecar: { edges: { 'a->b': 'w.yml:2' }, folded: [] },
+    }),
+    [IR_NAME, SIDECAR_NAME],
+  );
 });
