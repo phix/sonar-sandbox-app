@@ -5,8 +5,6 @@ const VALID_STATUSES = ['PLACED', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
  * thin and the rules are testable without a server.
  */
 export function createOrderService(store) {
-  const cacheTtlSeconds = 60;
-
   return {
     listOrders() {
       return store.list();
