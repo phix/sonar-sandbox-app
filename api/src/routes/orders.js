@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { buildSummary } from '../reports/summary.js';
 
 export function createOrderRouter(service) {
   const router = Router();
@@ -9,6 +10,10 @@ export function createOrderRouter(service) {
 
   router.get('/revenue', (req, res) => {
     res.json({ revenue: service.totalRevenue() });
+  });
+
+  router.get('/summary', (req, res) => {
+    res.json({ summary: buildSummary(service.listOrders(), req.query) });
   });
 
   router.get('/:id', (req, res) => {

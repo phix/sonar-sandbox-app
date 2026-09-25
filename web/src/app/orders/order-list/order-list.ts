@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { OrderService } from '../order.service';
 import { Order } from '../order.model';
+import { OrderStats } from '../order-stats';
 
 @Component({
   selector: 'app-order-list',
@@ -11,6 +12,7 @@ import { Order } from '../order.model';
 })
 export class OrderList implements OnInit {
   private readonly orders = inject(OrderService);
+  private readonly stats = inject(OrderStats);
 
   readonly items = signal<Order[]>([]);
   readonly loading = signal(true);
@@ -27,6 +29,11 @@ export class OrderList implements OnInit {
         this.loading.set(false);
       }
     });
+  }
+
+  /** Everything the stats panel renders. */
+  panel() {
+    return this.stats.build(this.items(), { highlightLargeOrders: true });
   }
 
   /** Orders that are still in flight, i.e. neither delivered nor cancelled. */
