@@ -1,3 +1,356 @@
 {
-  "items": []
+  "items": [
+    {
+      "group_id": "api|javascript:S1121|MAJOR",
+      "group_fingerprint": "gf-a00fc54dc1f3",
+      "rule_key": "javascript:S1121",
+      "severity": "MAJOR",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDWszv0lNjTvaXklx77"
+      ],
+      "finding_count": 1,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-22"
+    },
+    {
+      "group_id": "api|javascript:S1128|MINOR",
+      "group_fingerprint": "gf-2f7b5c842c7c",
+      "rule_key": "javascript:S1128",
+      "severity": "MINOR",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDW0RqZ_4ZBPosqqH0M",
+        "AaDW0RqC_4ZBPosqqH0J"
+      ],
+      "finding_count": 2,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-23"
+    },
+    {
+      "group_id": "api|javascript:S1481|MINOR",
+      "group_fingerprint": "gf-3c5356cb602b",
+      "rule_key": "javascript:S1481",
+      "severity": "MINOR",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDW0RqC_4ZBPosqqH0K",
+        "AaDW0RpW_4ZBPosqqH0F",
+        "AaDW0Rpq_4ZBPosqqH0H"
+      ],
+      "finding_count": 3,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-24"
+    },
+    {
+      "group_id": "api|javascript:S1854|MAJOR",
+      "group_fingerprint": "gf-b4678e809fbb",
+      "rule_key": "javascript:S1854",
+      "severity": "MAJOR",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDW0Rol_4ZBPosqqH0B",
+        "AaDW0RqC_4ZBPosqqH0L",
+        "AaDW0RpW_4ZBPosqqH0G",
+        "AaDW0Rpq_4ZBPosqqH0I"
+      ],
+      "finding_count": 4,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-25"
+    },
+    {
+      "group_id": "api|javascript:S2004|CRITICAL",
+      "group_fingerprint": "gf-5d79bdc2a17f",
+      "rule_key": "javascript:S2004",
+      "severity": "CRITICAL",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDWszvhlNjTvaXklx75"
+      ],
+      "finding_count": 1,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-26"
+    },
+    {
+      "group_id": "api|javascript:S3504|CRITICAL",
+      "group_fingerprint": "gf-03507d2ef1a4",
+      "rule_key": "javascript:S3504",
+      "severity": "CRITICAL",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDW0Rol_4ZBPosqqHz_",
+        "AaDW0Rol_4ZBPosqqH0A"
+      ],
+      "finding_count": 2,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-27"
+    },
+    {
+      "group_id": "api|javascript:S3776|CRITICAL",
+      "group_fingerprint": "gf-93610224b4a4",
+      "rule_key": "javascript:S3776",
+      "severity": "CRITICAL",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDWszwIlNjTvaXklx8B",
+        "AaDWszwplNjTvaXklx8H"
+      ],
+      "finding_count": 2,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-28"
+    },
+    {
+      "group_id": "api|javascript:S4144|MAJOR",
+      "group_fingerprint": "gf-7ffe4c343e3e",
+      "rule_key": "javascript:S4144",
+      "severity": "MAJOR",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDWszwIlNjTvaXklx7-",
+        "AaDWszwIlNjTvaXklx7_"
+      ],
+      "finding_count": 2,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-29"
+    },
+    {
+      "group_id": "api|javascript:S6582|MINOR",
+      "group_fingerprint": "gf-9dc8bb3385e6",
+      "rule_key": "javascript:S6582",
+      "severity": "MINOR",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDW0Rol_4ZBPosqqH0C",
+        "AaDW0Rol_4ZBPosqqH0D",
+        "AaDW0Rol_4ZBPosqqH0E"
+      ],
+      "finding_count": 3,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-30"
+    },
+    {
+      "group_id": "api|javascript:S7737|MINOR",
+      "group_fingerprint": "gf-b181f49cf1b8",
+      "rule_key": "javascript:S7737",
+      "severity": "MINOR",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDWszvhlNjTvaXklx74"
+      ],
+      "finding_count": 1,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-31"
+    },
+    {
+      "group_id": "api|javascript:S7765|MINOR",
+      "group_fingerprint": "gf-6e83c5f8893c",
+      "rule_key": "javascript:S7765",
+      "severity": "MINOR",
+      "module_prefix": "api",
+      "finding_ids": [
+        "AaDWszvhlNjTvaXklx76"
+      ],
+      "finding_count": 1,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-32"
+    },
+    {
+      "group_id": "web|typescript:S1128|MINOR",
+      "group_fingerprint": "gf-4f857a30d6e2",
+      "rule_key": "typescript:S1128",
+      "severity": "MINOR",
+      "module_prefix": "web",
+      "finding_ids": [
+        "AaDW0RmI_4ZBPosqqHz8",
+        "AaDW0Riz_4ZBPosqqHz6"
+      ],
+      "finding_count": 2,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-33"
+    },
+    {
+      "group_id": "web|typescript:S3358|MAJOR",
+      "group_fingerprint": "gf-2e80d8b85dce",
+      "rule_key": "typescript:S3358",
+      "severity": "MAJOR",
+      "module_prefix": "web",
+      "finding_ids": [
+        "AaDWszu9lNjTvaXklx7z",
+        "AaDWszu9lNjTvaXklx70",
+        "AaDWszu9lNjTvaXklx71",
+        "AaDWszu9lNjTvaXklx72"
+      ],
+      "finding_count": 4,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-34"
+    },
+    {
+      "group_id": "web|typescript:S3504|CRITICAL",
+      "group_fingerprint": "gf-9eff39728ece",
+      "rule_key": "typescript:S3504",
+      "severity": "CRITICAL",
+      "module_prefix": "web",
+      "finding_ids": [
+        "AaDW0Rmv_4ZBPosqqHz9",
+        "AaDW0Rmv_4ZBPosqqHz-"
+      ],
+      "finding_count": 2,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-35"
+    },
+    {
+      "group_id": "web|typescript:S3776|CRITICAL",
+      "group_fingerprint": "gf-f0d1f0a76ce5",
+      "rule_key": "typescript:S3776",
+      "severity": "CRITICAL",
+      "module_prefix": "web",
+      "finding_ids": [
+        "AaDWszu9lNjTvaXklx73"
+      ],
+      "finding_count": 1,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-36"
+    },
+    {
+      "group_id": "web|typescript:S4144|MAJOR",
+      "group_fingerprint": "gf-6dfaf3151a36",
+      "rule_key": "typescript:S4144",
+      "severity": "MAJOR",
+      "module_prefix": "web",
+      "finding_ids": [
+        "AaDWszu9lNjTvaXklx7y"
+      ],
+      "finding_count": 1,
+      "eligibility": {
+        "is_eligible": true,
+        "reason": "grouped for ticketing"
+      },
+      "status": "Ticketed",
+      "attempt_count": 0,
+      "branch_name": null,
+      "pr_number": null,
+      "auto_continue": false,
+      "jira_issue_key": "SONAR-37"
+    }
+  ]
 }
