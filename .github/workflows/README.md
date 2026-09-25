@@ -14,7 +14,7 @@ backlog required — everything it needs is already planted in this repo.
 | 1 | [`01 - create the demo PR`](demo-create-pr.yml) | You want to (re)start the walkthrough. Opens the standing demo PR carrying all 32 planted findings. **Run this manually — it's the only step you start yourself.** |
 | → | `02 - scan, gate & settle` | Fires **automatically** the instant step 1 opens the PR (and again on every push). You don't run this by hand for the demo. |
 | 2 | [`05 - remediate a PR`](remediate.yml) | Run manually to fix eligible findings on the demo PR and push the fix back (which re-triggers `02`). Leave the `pr` input blank to target the standing demo PR. |
-| 3 | [`06 - reset the demo`](demo-reset.yml) | Run manually once you want to restore all 32 planted findings and start the walkthrough over. Does **not** recreate the PR — same PR number, re-scanned. `scope: everything` (the default) also closes every `sonar/*` PR, deletes every `sonar/*` branch and empties `plan.json`, so the finding-driven path restarts from a known state too; `scope: demo` is the branch-only original. |
+| 3 | [`06 - reset the demo`](demo-reset.yml) | Run manually once you want to restore all 32 planted findings and start the walkthrough over. Does **not** recreate the PR — same PR number, re-scanned. `scope: everything` (the default) also closes every `sonar/*` PR, deletes every `sonar/*` branch and empties `plan.json`, so the finding-driven path restarts from a known state too; `scope: demo` is the branch-only original. `dry_run: true` prints every branch, PR and plan entry it would destroy and mutates nothing at all — run it once before the first live reset. |
 
 Repeat 2 ⇄ `02` until the gate is green, or the attempt cap is hit.
 

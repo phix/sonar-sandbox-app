@@ -152,7 +152,7 @@
       "sources": [
         {
           "path": ".github/workflows/demo-reset.yml",
-          "line": 22,
+          "line": 24,
           "label": "06 - reset the demo"
         }
       ],

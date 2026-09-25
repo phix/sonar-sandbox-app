@@ -18,7 +18,9 @@
 #
 # The reset is the one operation here that destroys work by design, so it is
 # the one that least deserves the benefit of the doubt. Everything it restores
-# or clears, it then verifies.
+# or clears, it then verifies — and `dry_run: true` reports all of it without
+# mutating anything, so the first live run of the group cleanup does not have
+# to be the first time anyone sees what it would delete.
 name: 06 - reset the demo
 
 on:
@@ -34,6 +36,12 @@ on:
           - everything
           - demo
         default: everything
+      dry_run:
+        description: >-
+          Report every branch, PR and plan entry this would destroy, and change
+          nothing at all. Run this once before the first live reset.
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -43,6 +51,9 @@ env:
   DIRTY_BRANCH: demo/planted-smells
   DIRTY_TAG: v0-pristine
   CLEAN_TAG: v0-clean
+  # Read in the scripts below rather than repeated as `${{ !inputs.dry_run }}`
+  # in every guard, so a step added later has one obvious thing to check.
+  DRY_RUN: ${{ inputs.dry_run }}
 
 jobs:
   reset:
@@ -85,9 +96,11 @@ jobs:
           echo "ok: $DIRTY_TAG carries commits main does not"
 
       - name: Force-push the defective branch back to ${{ env.DIRTY_TAG }}
+        if: ${{ !inputs.dry_run }}
         run: git push --force origin "${{ steps.refs.outputs.dirty }}:refs/heads/$DIRTY_BRANCH"
 
       - name: Verify the branch landed where it should
+        if: ${{ !inputs.dry_run }}
         run: |
           git fetch -q origin "$DIRTY_BRANCH"
           actual="$(git rev-parse FETCH_HEAD)"
@@ -125,6 +138,10 @@ jobs:
 
           echo "main advanced past $CLEAN_TAG with ordinary commits; advancing the tag."
           git log --oneline "$clean..$head"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "would advance $CLEAN_TAG from $clean to $head"
+            exit 0
+          fi
           # An annotated tag is a real object and needs a committer identity,
           # which a bare runner does not have.
           git config user.name "github-actions[bot]"
@@ -154,6 +171,9 @@ jobs:
   verify-findings:
     name: the planted findings are back
     needs: reset
+    # Nothing was pushed, so there is nothing to verify — a dry run that then
+    # asserted the branch had moved would fail on purpose.
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     container: node:24-bookworm
     steps:
@@ -208,6 +228,10 @@ jobs:
           fi
           while read -r n; do
             [ -z "$n" ] && continue
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "would close PR #$n"
+              continue
+            fi
             gh pr comment "$n" --repo "$GITHUB_REPOSITORY" --body \
               'Closed by the full-scenario reset (`06 - reset the demo`, `scope: everything`). Its branch and plan entry are being cleared so the pipeline can run again from a known state. Nothing here was merged and nothing was lost that a re-run will not recreate.'
             gh pr close "$n" --repo "$GITHUB_REPOSITORY"
@@ -228,6 +252,10 @@ jobs:
           fi
           while read -r b; do
             [ -z "$b" ] && continue
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "would delete branch $b"
+              continue
+            fi
             echo "deleting $b"
             gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$b"
           done <<< "$branches"
@@ -235,12 +263,27 @@ jobs:
       # The half that is easiest to forget, and the one that actually breaks
       # the next run: the branches are cosmetic, but a plan that still lists a
       # ticket per group makes bulk onboarding skip every one of them.
+      #
+      # Skipped entirely on a dry run, because state-checkout is not read-only:
+      # it CREATES automation-state as an orphan if the branch does not exist.
+      # The dry-run branch of the step below reads the plan off the remote
+      # instead, so "change nothing at all" is literally true.
       - uses: ./.github/actions/state-checkout
+        if: ${{ !inputs.dry_run }}
         with:
           token: ${{ secrets.SANDBOX_REPO_TOKEN }}
 
       - name: Empty the plan
         run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            if git fetch -q origin automation-state 2>/dev/null; then
+              echo "plan.json currently holds:"
+              git show FETCH_HEAD:plan.json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{for (const i of (JSON.parse(s).items || [])) console.log('  would drop ' + i.group_fingerprint + ' ' + (i.jira_issue_key || '-') + ' (' + i.status + ')')})"
+            else
+              echo "no automation-state branch exists — nothing in the plan to drop"
+            fi
+            exit 0
+          fi
           # `{"items":[]}` is exactly what state-checkout writes when it creates
           # automation-state as a fresh orphan, so this is the plan's own empty
           # state rather than a new one invented here.
@@ -248,14 +291,18 @@ jobs:
           echo "plan.json -> $(cat .state/plan.json | tr -d '\n')"
 
       - uses: ./.github/actions/state-commit
+        if: ${{ !inputs.dry_run }}
         with:
           token: ${{ secrets.SANDBOX_REPO_TOKEN }}
           message: "Reset the plan: full-scenario reset from 06"
 
       # Verified rather than announced, for the same reason the demo branch is
       # verified above: a reset that silently did half its job reads exactly
-      # like one that did all of it.
+      # like one that did all of it. Skipped on a dry run, where nothing was
+      # supposed to become empty and the steps above have already printed what
+      # they would have removed.
       - name: Verify the namespace and the plan are actually empty
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.SANDBOX_REPO_TOKEN }}
         run: |
