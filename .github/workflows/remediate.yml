@@ -410,14 +410,53 @@ jobs:
       # never execute src/server.js or bind a port. Builds the image, runs it,
       # and requires /health and /api/orders to answer.
       #
+      # THE DOCKERFILE IS BORROWED FROM main WHEN THIS BRANCH HAS NONE, and that
+      # is not a nicety. The demo branch is cut from v0-pristine, which predates
+      # the Dockerfile landing on main, so `docker build .` found nothing to
+      # read — proven by run 36090744175 (2026-09-25), where the gate ran for
+      # the first time and failed with "failed to read dockerfile: open
+      # Dockerfile: no such file or directory". It is the same trap the
+      # coverage comment above documents for test:coverage, and the same answer
+      # applies: the Dockerfile is pipeline infrastructure rather than target
+      # code, so take main's copy instead of teaching the demo baseline about
+      # it. Moving v0-pristine is not an option — that tag is the catalogue's
+      # oracle.
+      #
+      # The borrowed files are removed afterwards, so the commit step sees the
+      # branch exactly as it is: a gate must not add a file to the diff this PR
+      # is not about.
+      #
       # A gate on the PUSH only. It is NOT proof that any finding is fixed —
       # that is Sonar's re-scan to say, after the push, not this step's to
       # assume (sonar-remediation-automation docs/decisions/container-gate.md).
       - name: Container gate — the built app must boot and serve
         if: always()
         run: |
+          borrowed=0
+          if [ ! -f Dockerfile ]; then
+            if ! git cat-file -e origin/main:Dockerfile 2>/dev/null; then
+              echo "::error title=no Dockerfile::neither this branch nor main carries a Dockerfile, so the app image cannot be built."
+              exit 1
+            fi
+            borrowed=1
+            echo "this branch has no Dockerfile (it predates main's); borrowing main's"
+            git show origin/main:Dockerfile > Dockerfile
+            if git cat-file -e origin/main:.dockerignore 2>/dev/null; then
+              git show origin/main:.dockerignore > .dockerignore
+            fi
+          fi
+
+          # `set +e` around the gate so the borrow is undone whatever it
+          # decides — an early exit here would leave a Dockerfile on the demo
+          # branch and put it in the very diff the demo exists to show.
+          set +e
           node .automation/verify/container.mjs --root . \
             --tag sonar-sandbox-app:gate --json container-gate.json
+          rc=$?
+          set -e
+
+          if [ "$borrowed" = "1" ]; then rm -f Dockerfile .dockerignore; fi
+          exit "$rc"
 
       - name: Commit and push
         id: push
