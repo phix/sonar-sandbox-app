@@ -178,8 +178,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+  # NAME CHANGED 2026-09-25, and the name is the point of the job rather than
+  # decoration. It used to say "the planted findings are back", which reads as
+  # "the demo is ready". This job cannot establish that. `smells:verify` runs
+  # eslint-plugin-sonarjs and says so itself: "This is a pre-flight. The
+  # authoritative gate is a real Sonar scan." It sees 27 of the 32 catalogue
+  # rules and reports the other 5 as skipped.
+  #
+  # SONAR-READY IS ESTABLISHED BY THE SCAN, not here. The reset pushes the
+  # branch, which triggers `02 - scan, gate & settle`, whose `oracle` job diffs
+  # what Sonar actually reported against the catalogue, fails if a planted rule
+  # went unreported, and posts the per-rule table as a PR comment. So this job
+  # verifies the CODE and the scan verifies the CLAIM, and neither name is
+  # allowed to imply the other.
   verify-findings:
-    name: the planted findings are back
+    name: the planted code is back (local pre-flight, not the Sonar oracle)
     needs: baseline
     # A dry run pushes nothing, so there is nothing to verify — and asserting
     # the branch had moved would fail on purpose.
