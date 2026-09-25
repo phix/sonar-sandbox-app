@@ -154,7 +154,21 @@ export function generate({ repoRoot, manual, layout, revision }) {
     Object.assign(c, over);
   }
   for (const e of manual.connections ?? []) {
-    seen.delete(`${e.from}->${e.to}`);
+    const key = `${e.from}->${e.to}`;
+    // A manual connection OVERRIDES the generated one, and it has to actually
+    // replace it. Forgetting the key in `seen` alone let the manual edge be
+    // added BESIDE the generated edge, and because the id scheme is
+    // `${from}--${to}` the result was two connections with the same id — which
+    // the renderer rejects outright:
+    //
+    //   /connections/29/id duplicates relationship id "demo-reset--sonar-pr-scan"
+    //
+    // Invisible until 2026-09-25, when `06` gained a `gh workflow run` dispatch
+    // to `02` and collided with the hand-authored "force-push → re-scan" edge
+    // for the same pair. Nothing had ever tripped it before.
+    seen.delete(key);
+    const at = connections.findIndex((c) => `${c.from}->${c.to}` === key);
+    if (at >= 0) connections.splice(at, 1);
     addEdge(e.from, e.to, e);
   }
 

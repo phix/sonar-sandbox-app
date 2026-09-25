@@ -64,13 +64,31 @@ Your job in this repo is the *pipeline*, not the code. Concretely:
 
 | Ref | Meaning |
 |---|---|
-| `v0-pristine` | the **complete, un-remediated** set of planted defects — the dirtiest this code ever gets, and the base for the demo branch. "Pristine" means pristine *as a test fixture*, not clean code |
+| `v0-pristine` | the **complete, un-remediated** set of planted defects — the source of the demo branch's *content*. "Pristine" means pristine *as a test fixture*, not clean code |
 | `v0-clean` / `main` | the clean baseline. `main` is where remediated work lands |
 
-`01 - create the demo PR` force-pushes `v0-pristine` onto `demo/planted-smells`
-and opens the PR (it refuses if `v0-pristine` is an ancestor of `v0-clean`, which
-would make the PR diff empty). `06 - reset the demo` restores that state, so the
-demo is repeatable rather than a recording.
+`01 - create the demo PR` and `06 - reset the demo` both build
+`demo/planted-smells` through the shared `_demo-baseline.yml` module as
+**`origin/main` plus the planted content** — `api/src`, `web/src` and
+`smells/catalogue.json` taken from `v0-pristine`, and nothing else.
+
+That last part matters, and it used to be wrong. Both workflows force-pushed the
+`v0-pristine` **tag** itself, which is a 2026-08-29 tree, so the branch was weeks
+stale in every respect and the PR a viewer opened — advertised as "32 planted
+findings" — was `57 files changed, 996 insertions(+), 6478 deletions(-)`: it
+deleted the entire pipeline-diagram tool and most of the docs, and added the
+smells somewhere inside that. Three downstream workarounds existed only to cope
+with the tooling the branch was missing: the container gate borrowed main's
+Dockerfile at run time, `05` ran `npm test` rather than `test:coverage`, and
+`.automation` was not gitignored so the first real remediation commit recorded it
+as a submodule gitlink.
+
+Built from main, the diff is the smells and nothing else (`11 files changed, 875
+insertions(+), 10 deletions(-)`), the branch carries current tooling by
+construction, and **main is the single source of truth for tooling** while the
+demo branch is content only. That is why the smells tooling had to be promoted to
+main first — see `smells/generate-catalogue.mjs`, which now generates the
+catalogue from a real Sonar scan rather than the local proxy.
 
 ## Where it runs — and what is *not* deployed
 

@@ -57,6 +57,7 @@ to supply it for you — there's no reason to.
 
 | Workflow | Called by |
 |---|---|
+| [`_demo-baseline.yml`](_demo-baseline.yml) | `01`, `06` — builds `demo/planted-smells` as **current `main` plus the planted content** (`api/src`, `web/src`, `smells/catalogue.json` from `v0-pristine`) and reports whether the ref actually moved. Defined once so the two cannot disagree about what the baseline is; see the file for why it is no longer a force-push of the frozen tag. |
 | [`_file-ticket.yml`](_file-ticket.yml) | `03`, `04` — files or finds a Jira ticket per finding group in scope. |
 | [`_branch-pr.yml`](_branch-pr.yml) | `03`, `04` — creates or finds the branch + PR for one group. Names both from the group's Jira key and fingerprint (`sonar/SONAR-42-gf-…`, `[SONAR-42] [api] …`), via `jira/naming.mjs` in the automation repo, so they cannot name different tickets. Reuses a pre-existing `sonar/<fingerprint>` branch rather than duplicating it. |
 | [`_settle-notify.yml`](_settle-notify.yml) | `02`'s `settle` job — reads the gate verdict, decides ready/red, optionally auto-merges, posts the verdict on the PR, records the outcome on any ticket the PR already had, and writes the remediated /**not** remediated outcome onto each Sonar finding (comment + tag). |
