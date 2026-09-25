@@ -10,6 +10,7 @@ const seed = [
 
 export function createStore(initial = seed) {
   const orders = new Map(initial.map((o) => [o.id, { ...o }]));
+  const seedCount = initial.length;
 
   return {
     list() {
