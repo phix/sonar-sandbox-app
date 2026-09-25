@@ -511,15 +511,26 @@ jobs:
           # first real remediation run (e1d2eb4) committed exactly that, the
           # first time in the branch's history, putting a meaningless
           # `160000 commit` entry in the very diff the demo exists to show.
-          # Excluding it by pathspec is right for the demo branch specifically,
-          # because that branch is cut from v0-pristine and will never carry a
-          # .gitignore fix made on main.
+          # It can no longer be excluded from the `git add` by pathspec. #52
+          # rebuilt this branch as main + planted content, so it DOES carry
+          # main's `.automation/` ignore rule now — the "cut from v0-pristine,
+          # never carries a main fix" premise this used to rest on is dead —
+          # and naming an ignored path in a pathspec makes `git add` exit 1
+          # ("The following paths are ignored by one of your .gitignore files")
+          # instead of skipping it. That killed the first remediation run after
+          # the rebuild (36193419410). So the guard may name it and the add may
+          # not; it is unstaged by name afterwards, which still covers a base
+          # branch that lacks the ignore rule.
           SCRATCH=(findings.json ratio.json dispositions.json agentic.json
                     remediation-comment.md agentic-comment.md
                     container-gate.json container-gate-comment.md
                     .automation)
           EXCLUDE=()
           for f in "${SCRATCH[@]}"; do EXCLUDE+=(":(exclude)$f"); done
+          ADD=()
+          for f in "${SCRATCH[@]}"; do
+            [ "$f" = .automation ] || ADD+=(":(exclude)$f")
+          done
 
           if git diff --quiet -- . "${EXCLUDE[@]}" \
              && git diff --cached --quiet -- . "${EXCLUDE[@]}" \
@@ -540,7 +551,8 @@ jobs:
           # remediate-pr's batch case): the glob matches nothing and `-f`
           # is silent about that.
           rm -f .sonar-tracking/*.json
-          git add -A -- . "${EXCLUDE[@]}"
+          git add -A -- . "${ADD[@]}"
+          git reset -q -- .automation
           # Two provenances, counted separately. Sweeping model-authored edits
           # into a commit whose subject says "deterministically" would put a
           # false claim in the permanent history -- and provenance is exactly
