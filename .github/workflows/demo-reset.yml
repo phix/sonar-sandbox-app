@@ -56,77 +56,90 @@ env:
   DRY_RUN: ${{ inputs.dry_run }}
 
 jobs:
-  reset:
+  # The baseline is built in exactly one place, shared with 01 — see
+  # _demo-baseline.yml for why it is `main + content` rather than a force-push
+  # of the frozen v0-pristine tag, and for what `changed` means.
+  baseline:
+    uses: ./.github/workflows/_demo-baseline.yml
+    with:
+      dry_run: ${{ inputs.dry_run }}
+    # Reusable workflows do not inherit secrets unless the caller says so — the
+    # module's checkout fails with "Input required and not supplied: token"
+    # without this. Same pattern as _file-ticket and _branch-pr.
+    secrets: inherit
+
+  # Everything that has to happen AFTER the branch moved, and nothing that has
+  # to happen before it. Split out because the reusable workflow cannot also do
+  # the v0-clean bookkeeping or dispatch the scan.
+  bookkeeping:
+    needs: baseline
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     steps:
-      # SANDBOX_REPO_TOKEN, not GITHUB_TOKEN, for the same reason remediate.yml
-      # shouts it: the whole point of this force-push is the PR scan it
-      # re-triggers, and a push made with GITHUB_TOKEN does not properly fire
-      # downstream workflows. Proven by this workflow's own first live run
-      # (33419774290, 2026-08-31): the scan run was created but sat at
-      # `action_required` with zero jobs until a human approved it — a reset
-      # that needs a click defeats a reset.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.SANDBOX_REPO_TOKEN }}
 
-      - name: Resolve the tags
-        id: refs
-        run: |
-          dirty="$(git rev-parse "${DIRTY_TAG}^{commit}")"
-          clean="$(git rev-parse "${CLEAN_TAG}^{commit}")"
-          echo "dirty=$dirty" >> "$GITHUB_OUTPUT"
-          echo "clean=$clean" >> "$GITHUB_OUTPUT"
-          echo "dirty $DIRTY_TAG -> $dirty"
-          echo "clean $CLEAN_TAG -> $clean"
-
-      # If the defective branch is not a descendant of clean main, the PR diff
-      # comes out empty and the demo silently shows nothing. This already
-      # happened once during #14, so it is asserted rather than assumed.
-      - name: Assert the defective tag still produces a diff
-        run: |
-          # An empty PR diff happens only when the defective tip is CONTAINED in
-          # main. Having diverged from main is normal and fine — main moves on
-          # its own whenever tooling lands.
-          if git merge-base --is-ancestor "${{ steps.refs.outputs.dirty }}" "${{ steps.refs.outputs.clean }}"; then
-            echo "::error::$DIRTY_TAG is contained in $CLEAN_TAG — the PR diff would be empty."
-            exit 1
-          fi
-          echo "ok: $DIRTY_TAG carries commits main does not"
-
-      - name: Force-push the defective branch back to ${{ env.DIRTY_TAG }}
-        if: ${{ !inputs.dry_run }}
-        run: git push --force origin "${{ steps.refs.outputs.dirty }}:refs/heads/$DIRTY_BRANCH"
-
       - name: Verify the branch landed where it should
-        if: ${{ !inputs.dry_run }}
         run: |
           git fetch -q origin "$DIRTY_BRANCH"
           actual="$(git rev-parse FETCH_HEAD)"
-          [ "$actual" = "${{ steps.refs.outputs.dirty }}" ] || {
-            echo "::error::branch is at $actual, expected ${{ steps.refs.outputs.dirty }}"; exit 1; }
+          [ "$actual" = "${{ needs.baseline.outputs.sha }}" ] || {
+            echo "::error::branch is at $actual, expected ${{ needs.baseline.outputs.sha }}"; exit 1; }
           echo "ok: $DIRTY_BRANCH at $actual"
+
+      # THE SCAN IS THE POINT, SO IT IS GUARANTEED RATHER THAN HOPED FOR.
+      #
+      # A force-push to the SHA a branch is already at moves no ref, so GitHub
+      # fires no `synchronize` event and no PR scan. The branch gets restored and
+      # Sonar keeps its previous view of it — which is exactly how the demo sat
+      # with the code carrying all 32 smells while Sonar held every one of them
+      # CLOSED, so `05` fetched nothing and the whole pipeline looked dead.
+      #
+      # The module reports whether the ref moved. When it did, the push already
+      # fired the scan and dispatching here would just duplicate a two-minute
+      # run; when it did not, this is the only thing that will.
+      - name: Dispatch the scan if the push did not move the ref
+        if: needs.baseline.outputs.changed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SANDBOX_REPO_TOKEN }}
+        run: |
+          echo "the branch was already at ${{ needs.baseline.outputs.sha }}, so the push moved no ref and fired no scan."
+          echo "dispatching 02 against the open demo PR so the baseline is actually analysed."
+          num="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$DIRTY_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$num" ]; then
+            echo "::warning title=no open demo PR::nothing to scan. Run \"01 - create the demo PR\" once."
+            exit 0
+          fi
+          gh workflow run sonar-pr-scan.yml --repo "$GITHUB_REPOSITORY" -f pr="$num"
+          echo "dispatched 02 for PR #$num"
+
 
       # This workflow never force-pushes main, so main moving FORWARD with
       # ordinary tooling commits destroys nothing — advance the tag and stay
-      # quiet. What must never pass silently is main containing the defective
-      # commits, which means PR #2 got merged: the baseline is poisoned and a
-      # reset would restore a dirty main.
+      # quiet. What must never pass silently is main containing the planted
+      # commits, which would mean the demo PR got merged: the baseline is
+      # poisoned and a reset would rebuild from a dirty main.
       - name: Keep ${{ env.CLEAN_TAG }} tracking main
         run: |
           git fetch -q origin main
           head="$(git rev-parse FETCH_HEAD)"
-          clean="${{ steps.refs.outputs.clean }}"
-          dirty="${{ steps.refs.outputs.dirty }}"
+          git fetch -q --tags --force origin
+          clean="$(git rev-parse "${CLEAN_TAG}^{commit}")"
+          # The content the baseline plants, from the tag that carries it. The
+          # branch is built on top of main, so "main contains the planted code"
+          # means main itself carries the smells.
+          planted="$(git rev-parse "${DIRTY_TAG}^{commit}")"
+          echo "main=$head  $CLEAN_TAG=$clean  $DIRTY_TAG=$planted"
 
           if [ "$head" = "$clean" ]; then
             echo "ok: main is at $CLEAN_TAG"
             exit 0
           fi
 
-          if git merge-base --is-ancestor "$dirty" "$head"; then
-            echo "::error::main contains $DIRTY_TAG — PR #2 looks merged, so main is no longer a clean baseline."
+          if git merge-base --is-ancestor "$planted" "$head"; then
+            echo "::error::main contains $DIRTY_TAG — the demo PR was merged, so main is no longer a clean baseline."
             echo "::error::Refusing to move $CLEAN_TAG onto a dirty main. Revert the merge on main first."
             exit 1
           fi
@@ -138,10 +151,6 @@ jobs:
 
           echo "main advanced past $CLEAN_TAG with ordinary commits; advancing the tag."
           git log --oneline "$clean..$head"
-          if [ "$DRY_RUN" = "true" ]; then
-            echo "would advance $CLEAN_TAG from $clean to $head"
-            exit 0
-          fi
           # An annotated tag is a real object and needs a committer identity,
           # which a bare runner does not have.
           git config user.name "github-actions[bot]"
@@ -150,13 +159,14 @@ jobs:
           git push -q --force origin "$CLEAN_TAG"
           echo "ok: $CLEAN_TAG -> $head"
 
-      # A restored tree missing the scan config fails the NEXT scan, for a
-      # reason with no visible connection to this reset.
-      - name: Assert main still carries what the pipeline needs
+      # Rebuilt from main, so the baseline needs main to carry the scan config
+      # and the tooling that reads the catalogue. A missing one here fails the
+      # NEXT scan for a reason with no visible connection to this reset.
+      - name: Assert main still carries what the baseline needs
         run: |
           git fetch -q origin main
           missing=0
-          for path in sonar-project.properties smells/catalogue.json eslint.smells.config.mjs; do
+          for path in sonar-project.properties smells/catalogue.json eslint.smells.config.mjs smells/verify-catalogue.mjs; do
             git cat-file -e "FETCH_HEAD:$path" 2>/dev/null && echo "ok: $path" || { echo "::error::missing on main: $path"; missing=1; }
           done
           exit $missing
@@ -170,9 +180,9 @@ jobs:
 
   verify-findings:
     name: the planted findings are back
-    needs: reset
-    # Nothing was pushed, so there is nothing to verify — a dry run that then
-    # asserted the branch had moved would fail on purpose.
+    needs: baseline
+    # A dry run pushes nothing, so there is nothing to verify — and asserting
+    # the branch had moved would fail on purpose.
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     container: node:24-bookworm
@@ -194,7 +204,11 @@ jobs:
   # closed FIRST so the reason is on the record before the ref is gone.
   clear-groups:
     name: clear the sonar/* namespace and the plan
-    needs: reset
+    # `baseline`, not `bookkeeping`: this job touches the plan and the sonar/*
+    # namespace and has nothing to do with the demo branch, and it MUST still run
+    # on a dry run to report what it would clear. `bookkeeping` is skipped on a
+    # dry run, and a skipped dependency skips its dependents.
+    needs: baseline
     if: ${{ inputs.scope == 'everything' }}
     runs-on: ubuntu-latest
     permissions:

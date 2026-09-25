@@ -1,0 +1,144 @@
+# REUSABLE MODULE — called by 01 and 06, not meant to be run directly. See
+# .github/workflows/README.md.
+#
+# Module: put the demo branch back to the defective baseline, defined in exactly
+# ONE place so 01 and 06 cannot disagree about what "the baseline" is.
+#
+# ## The baseline is `origin/main` PLUS THE PLANTED CONTENT
+#
+# It used to be a force-push of the frozen `v0-pristine` tag, and the cost of
+# that was invisible until it was measured. `v0-pristine` is a 2026-08-29 tree,
+# so the demo branch was four weeks stale in every respect, and the PR a viewer
+# opened — advertised as "32 planted findings" — was
+#
+#   57 files changed, 996 insertions(+), 6478 deletions(-)
+#
+# i.e. it DELETED the entire pipeline-diagram tool, the archify research and
+# most of the docs, and ADDED the smells somewhere inside that. Every workflow
+# downstream then had to work around the tooling the branch was missing:
+#
+#   - the container gate had to borrow main's Dockerfile at run time (it is
+#     still there as a fallback, but it should now never fire);
+#   - `05` runs `npm test` rather than `test:coverage` because the branch
+#     predated `test:coverage`;
+#   - `.automation` was not gitignored on the branch, so the first real
+#     remediation commit recorded it as a submodule gitlink.
+#
+# Building from main makes all three disappear by construction, and it puts the
+# tooling question where it belongs: **main is the single source of truth for
+# tooling, and this branch is content only.** That is also why the smells
+# tooling had to be promoted to main first (#51) — otherwise the branch would
+# have lost those fixes the moment it stopped carrying its own tooling.
+#
+# ## `changed` is an output, and the caller needs it
+#
+# A force-push to the SHA a branch is already at produces no ref change, so
+# GitHub fires no `synchronize` event and no PR scan. The branch is restored and
+# nothing re-analyses it — which is how the demo sat in a state where Sonar held
+# every finding CLOSED while the code still contained all 32. So the module
+# reports whether the ref actually moved, and 06 dispatches `02` itself when it
+# did not.
+name: _demo-baseline
+
+on:
+  workflow_call:
+    inputs:
+      dry_run:
+        description: Build and report, but push nothing.
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      sha:
+        description: The commit the demo branch is (or should be) at.
+        value: ${{ jobs.baseline.outputs.sha }}
+      changed:
+        description: >-
+          Whether that commit differs from what the branch was at before. A
+          false here means the push will not fire a scan.
+        value: ${{ jobs.baseline.outputs.changed }}
+
+permissions:
+  contents: write
+
+env:
+  DIRTY_BRANCH: demo/planted-smells
+  DIRTY_TAG: v0-pristine
+  # The planted content, and ONLY the content. Everything else comes from main.
+  # `smells/catalogue.json` is here because main's copy is empty by design
+  # (main is the clean baseline); the tooling that reads it is not.
+  PLANTED_PATHS: api/src web/src smells/catalogue.json
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.build.outputs.sha }}
+      changed: ${{ steps.build.outputs.changed }}
+    steps:
+      # SANDBOX_REPO_TOKEN, not GITHUB_TOKEN: the push this makes is supposed to
+      # fire the PR scan, and a GITHUB_TOKEN push does not properly trigger
+      # workflows. Found the hard way — the scan sat at `action_required` with
+      # zero jobs until a human approved it.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - name: Build the baseline from main plus the planted content
+        id: build
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          git config user.name  'sonar-remediation-bot'
+          git config user.email 'sonar-remediation-bot@users.noreply.github.com'
+
+          # The module reads the PLANTED CONTENT out of the tag, so the tag has
+          # to be here. fetch-depth: 0 already brings tags along, but this is
+          # cheap and removes a class of flake that would surface as a
+          # confusing "pathspec did not match".
+          git fetch -q --tags --force origin
+
+          before="$(git ls-remote origin "refs/heads/$DIRTY_BRANCH" | cut -f1)"
+          echo "branch is currently at: ${before:-<does not exist>}"
+
+          # Current main, then the planted content laid over it. `git checkout
+          # <tag> -- <paths>` overwrites only those paths, so everything else —
+          # workflows, tools, docs, package.json — is main's.
+          git checkout -q -B "$DIRTY_BRANCH" origin/main
+          git checkout "$DIRTY_TAG" -- $PLANTED_PATHS
+
+          # The old guard was "v0-pristine must not be an ancestor of v0-clean",
+          # which only made sense while the branch WAS that tag. The property
+          # that actually matters is that the plant changed something: GitHub
+          # refuses to open a PR with no commits between, so failing here names
+          # the real cause instead of surfacing as "No commits between".
+          if git diff --cached --quiet; then
+            echo "::error::planting $PLANTED_PATHS from $DIRTY_TAG staged no change — the built branch would equal main and a PR from it would have no diff."
+            exit 1
+          fi
+
+          git add -A -- $PLANTED_PATHS
+          git commit -q \
+            -m "Plant the smell catalogue on current main" \
+            -m "Rebuilt from origin/main rather than force-pushing the frozen $DIRTY_TAG snapshot, so the diff a viewer opens is the smells and nothing else, and this branch carries current tooling by construction. Planted content taken from $DIRTY_TAG: $PLANTED_PATHS."
+
+          sha="$(git rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if [ "$sha" = "$before" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "the branch is already at this commit — a push would not move the ref"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "--- the diff a viewer will see ---"
+          git diff --stat origin/main HEAD | tail -3
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "dry run: not pushing"
+            exit 0
+          fi
+          git push --force origin "HEAD:refs/heads/$DIRTY_BRANCH"
+          echo "pushed $DIRTY_BRANCH -> $sha"

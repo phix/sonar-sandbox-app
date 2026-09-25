@@ -60,6 +60,26 @@
       ]
     },
     {
+      "id": "demo-baseline",
+      "type": "backend",
+      "label": "_demo-baseline",
+      "sources": [
+        {
+          "path": ".github/workflows/_demo-baseline.yml",
+          "line": 41,
+          "label": "_demo-baseline"
+        }
+      ],
+      "pos": [
+        480,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
       "id": "file-ticket",
       "type": "backend",
       "label": "_file-ticket",
@@ -600,11 +620,33 @@
       ]
     },
     {
+      "id": "demo-create-pr--demo-baseline",
+      "from": "demo-create-pr",
+      "to": "demo-baseline",
+      "label": "baseline",
+      "variant": "emphasis"
+    },
+    {
       "id": "demo-create-pr--sonar-pr-scan",
       "from": "demo-create-pr",
       "to": "sonar-pr-scan",
       "label": "opens PR",
       "variant": "emphasis"
+    },
+    {
+      "id": "demo-reset--demo-baseline",
+      "from": "demo-reset",
+      "to": "demo-baseline",
+      "label": "baseline",
+      "variant": "emphasis"
+    },
+    {
+      "id": "demo-reset--sonar-pr-scan",
+      "from": "demo-reset",
+      "to": "sonar-pr-scan",
+      "label": "gh workflow run",
+      "fromSide": "left",
+      "toSide": "left"
     },
     {
       "id": "demo-reset--state",
