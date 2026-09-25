@@ -113,6 +113,25 @@ jobs:
         with:
           # Sonar needs real history for new-code attribution and blame.
           fetch-depth: 0
+          # EXPLICIT, and it has to be. On a `pull_request` event a bare
+          # checkout already lands on the merge ref, so this line is a harmless
+          # restatement there. On a MANUAL dispatch there is no pull_request
+          # event to inherit from, and a bare checkout takes the DEFAULT
+          # BRANCH — so the scan analysed `main` and Sonar published the result
+          # as the PR's own analysis.
+          #
+          # Proven, not inferred: run 36091767072 (2026-09-25) dispatched with
+          # pr=10 logged `git checkout --progress --force -B main
+          # refs/remotes/origin/main`, and PR #10's 32 planted findings stayed
+          # CLOSED afterwards because clean main has none. That is the exact
+          # failure this repository is built against — a gate verdict about a
+          # tree the pull request does not contain — and it runs on the path
+          # that produces the REQUIRED check, so a manual re-run could publish
+          # a green gate computed from clean main onto a PR that is red.
+          #
+          # The merge ref is what a pull-request scan is supposed to evaluate,
+          # and it is what the automatic path has always evaluated.
+          ref: refs/pull/${{ needs.resolve.outputs.number }}/merge
 
       # Coverage has to be measured before the scan, not after: the scanner
       # reads lcov off disk. This also means a red test suite fails the gate
