@@ -533,8 +533,18 @@ jobs:
       # Not committed to the branch instead: demo-reset.yml restores this branch
       # to v0-pristine, and generated files committed onto it become noise in
       # the very diff the demo exists to show.
+      #
+      # AND NOT ON A DRY RUN. A dry run remediated nothing and pushed nothing,
+      # so it has no record to hand over — and uploading one anyway is worse
+      # than merely useless. settle finds a `dispositions.json`, concludes a
+      # remediation was attempted, and records an outcome for every finding it
+      # can see. Proven 2026-09-25: two dry runs left `remediation-record-pr10`
+      # behind, and the next settle pass wrote 32 `not-remediated` comments and
+      # tags onto real Sonar findings for a PR nobody had remediated.
+      # `settle/outcome.mjs` refuses to record an outcome without a record; this
+      # is what stops a record existing that was never earned.
       - name: Upload the remediation record for the settle stage
-        if: always()
+        if: ${{ always() && !inputs.dry_run }}
         uses: actions/upload-artifact@v4
         with:
           name: remediation-record-pr${{ needs.resolve-pr.outputs.number }}
