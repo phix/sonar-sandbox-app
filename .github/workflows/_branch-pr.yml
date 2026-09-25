@@ -97,7 +97,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       pr_number: ${{ steps.pr.outputs.number }}
-      branch_name: sonar/${{ inputs.fingerprint }}
+      branch_name: ${{ steps.branch.outputs.name }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -135,6 +135,25 @@ jobs:
           node .automation/jira/filter-findings.mjs all-findings.json \
             --fingerprints "${{ inputs.fingerprint }}" --out tracking-findings.json
 
+      # Both names come from jira/naming.mjs in the automation repo, so the
+      # branch and the PR title cannot disagree about the ticket number. They
+      # used to be built in two different languages — bash here, JavaScript in
+      # the github-script step below — with nothing making them agree.
+      - name: Compute the branch and PR names
+        id: names
+        env:
+          JIRA_KEY: ${{ inputs.jira_issue_key }}
+          FINGERPRINT: ${{ inputs.fingerprint }}
+        run: |
+          echo "name=$(node .automation/jira/naming.mjs branch \
+            --jira-key "$JIRA_KEY" --fingerprint "$FINGERPRINT")" >> "$GITHUB_OUTPUT"
+          echo "legacy=$(node .automation/jira/naming.mjs branch \
+            --fingerprint "$FINGERPRINT" --legacy)" >> "$GITHUB_OUTPUT"
+          echo "title=$(node .automation/jira/naming.mjs title --jira-key "$JIRA_KEY" \
+            --module "${{ inputs.module }}" --rule "${{ inputs.rule }}" \
+            --finding-count "${{ inputs.finding_count }}" \
+            --severity "${{ inputs.severity }}")" >> "$GITHUB_OUTPUT"
+
       # Deterministic and derived from the fingerprint alone, so a second run
       # for the same group — however it got triggered — always names the same
       # branch and finds it, rather than opening a duplicate under a fresh name.
@@ -143,9 +162,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SANDBOX_REPO_TOKEN }}
         run: |
-          name="sonar/${{ inputs.fingerprint }}"
+          name="${{ steps.names.outputs.name }}"
+          legacy="${{ steps.names.outputs.legacy }}"
+          # A group ticketed BEFORE the ticket number was added to branch names
+          # still owns its branch under the old name. Reusing it is the
+          # difference between resuming that work and opening a second PR for
+          # the same finding; a duplicate is worse than an ugly branch name.
           if git ls-remote --exit-code --heads origin "$name" >/dev/null 2>&1; then
             echo "branch $name already exists"
+          elif git ls-remote --exit-code --heads origin "$legacy" >/dev/null 2>&1; then
+            echo "branch $legacy already exists (pre-ticket-naming); reusing it"
+            name="$legacy"
           else
             git config user.name  'sonar-remediation-bot'
             git config user.email 'sonar-remediation-bot@users.noreply.github.com'
@@ -184,6 +211,7 @@ jobs:
         uses: actions/github-script@v8
         env:
           BRANCH: ${{ steps.branch.outputs.name }}
+          TITLE: ${{ steps.names.outputs.title }}
         with:
           script: |
             const branch = process.env.BRANCH;
@@ -198,7 +226,9 @@ jobs:
               + `&resolved=false`;
             const pr = await github.rest.pulls.create({
               owner, repo, head: branch, base: '${{ inputs.base_branch }}',
-              title: `[${{ inputs.module }}] ${{ inputs.rule }}: ${{ inputs.finding_count }} finding(s) (${{ inputs.severity }})`,
+              // Built by jira/naming.mjs from the same ticket key the branch
+              // name uses, so the two can never name different tickets.
+              title: process.env.TITLE,
               body: [
                 `Jira: ${{ env.JIRA_BASE_URL }}/browse/${{ inputs.jira_issue_key }}`,
                 `Sonar: ${dashboard}`,

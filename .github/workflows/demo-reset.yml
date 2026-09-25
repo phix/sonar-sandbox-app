@@ -9,13 +9,31 @@
 # status check are all keyed to, and a reset that renumbers it breaks every one
 # of them silently.
 #
+# `scope: everything` (the default) also clears the namespace the
+# finding-driven path accumulates — every `sonar/*` branch and PR, and
+# plan.json — so the WHOLE pipeline is re-runnable from a known state, not just
+# the demo branch. `scope: demo` is the original behaviour. The group cleanup
+# deliberately leaves Jira alone: the tickets are the audit trail the demo
+# exists to show, and a reset that erased them would erase the evidence.
+#
 # The reset is the one operation here that destroys work by design, so it is
-# the one that least deserves the benefit of the doubt. Everything it restores,
-# it then verifies.
+# the one that least deserves the benefit of the doubt. Everything it restores
+# or clears, it then verifies.
 name: 06 - reset the demo
 
 on:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: >-
+          everything (default) resets the whole scenario — the demo branch,
+          every sonar/* branch and PR, and plan.json. demo resets only the demo
+          branch, which is the original behaviour.
+        type: choice
+        options:
+          - everything
+          - demo
+        default: everything
 
 permissions:
   contents: write
@@ -144,3 +162,115 @@ jobs:
           ref: demo/planted-smells
       - run: npm ci --no-audit --no-fund
       - run: npm run smells:verify
+
+  # The demo branch is only half the state the pipeline accumulates. The
+  # finding-driven path (03/04) leaves one branch, one PR and one plan.json
+  # item PER GROUP, and none of that is restored by force-pushing the demo
+  # branch. Without this, "reset" returns the demo to step 0 while the next
+  # bulk onboarding run still believes every group already has a ticket.
+  #
+  # It touches only the `sonar/` namespace this pipeline creates, and never
+  # main. Deleting a branch also closes its PR, but the PR is commented and
+  # closed FIRST so the reason is on the record before the ref is gone.
+  clear-groups:
+    name: clear the sonar/* namespace and the plan
+    needs: reset
+    if: ${{ inputs.scope == 'everything' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    # Every job that reads or writes plan.json needs this same group; it is
+    # what turns a race with a concurrently-running pipeline stage into a FIFO
+    # queue. See .github/actions/state-checkout/action.yml.
+    concurrency:
+      group: automation-state
+      cancel-in-progress: false
+    steps:
+      # Needed before state-checkout, which requires a normal checkout of THIS
+      # repo so that `origin` exists for its ls-remote probe.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - name: Close the group pull requests
+        env:
+          GH_TOKEN: ${{ secrets.SANDBOX_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          numbers="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
+            --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("sonar/")) | .number')"
+          if [ -z "$numbers" ]; then
+            echo "no open sonar/* pull requests"
+            exit 0
+          fi
+          while read -r n; do
+            [ -z "$n" ] && continue
+            gh pr comment "$n" --repo "$GITHUB_REPOSITORY" --body \
+              'Closed by the full-scenario reset (`06 - reset the demo`, `scope: everything`). Its branch and plan entry are being cleared so the pipeline can run again from a known state. Nothing here was merged and nothing was lost that a re-run will not recreate.'
+            gh pr close "$n" --repo "$GITHUB_REPOSITORY"
+          done <<< "$numbers"
+
+      - name: Delete the group branches
+        env:
+          GH_TOKEN: ${{ secrets.SANDBOX_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          # `sonar/` only. A reset that guessed wider than the namespace this
+          # pipeline creates would delete somebody's work.
+          branches="$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" \
+            --jq '.[].name | select(startswith("sonar/"))')"
+          if [ -z "$branches" ]; then
+            echo "no sonar/* branches"
+            exit 0
+          fi
+          while read -r b; do
+            [ -z "$b" ] && continue
+            echo "deleting $b"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$b"
+          done <<< "$branches"
+
+      # The half that is easiest to forget, and the one that actually breaks
+      # the next run: the branches are cosmetic, but a plan that still lists a
+      # ticket per group makes bulk onboarding skip every one of them.
+      - uses: ./.github/actions/state-checkout
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+
+      - name: Empty the plan
+        run: |
+          # `{"items":[]}` is exactly what state-checkout writes when it creates
+          # automation-state as a fresh orphan, so this is the plan's own empty
+          # state rather than a new one invented here.
+          node -e "require('fs').writeFileSync('.state/plan.json', JSON.stringify({items:[]}, null, 2) + '\n')"
+          echo "plan.json -> $(cat .state/plan.json | tr -d '\n')"
+
+      - uses: ./.github/actions/state-commit
+        with:
+          token: ${{ secrets.SANDBOX_REPO_TOKEN }}
+          message: "Reset the plan: full-scenario reset from 06"
+
+      # Verified rather than announced, for the same reason the demo branch is
+      # verified above: a reset that silently did half its job reads exactly
+      # like one that did all of it.
+      - name: Verify the namespace and the plan are actually empty
+        env:
+          GH_TOKEN: ${{ secrets.SANDBOX_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          left="$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" \
+            --jq '.[].name | select(startswith("sonar/"))' | grep -c . || true)"
+          open="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
+            --json number,headRefName \
+            --jq '[.[] | select(.headRefName | startswith("sonar/"))] | length')"
+          git fetch -q origin automation-state
+          items="$(git show FETCH_HEAD:plan.json | node -e \
+            "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log((JSON.parse(s).items||[]).length))")"
+          echo "sonar/* branches left: $left, open sonar/* PRs: $open, plan items: $items"
+          if [ "$left" != "0" ] || [ "$open" != "0" ] || [ "$items" != "0" ]; then
+            echo "::error::reset did not complete — branches=$left prs=$open plan_items=$items"
+            exit 1
+          fi
+          echo "ok: the scenario is back to a state a fresh run can start from"

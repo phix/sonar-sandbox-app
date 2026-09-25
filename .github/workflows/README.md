@@ -14,7 +14,7 @@ backlog required — everything it needs is already planted in this repo.
 | 1 | [`01 - create the demo PR`](demo-create-pr.yml) | You want to (re)start the walkthrough. Opens the standing demo PR carrying all 32 planted findings. **Run this manually — it's the only step you start yourself.** |
 | → | `02 - scan, gate & settle` | Fires **automatically** the instant step 1 opens the PR (and again on every push). You don't run this by hand for the demo. |
 | 2 | [`05 - remediate a PR`](remediate.yml) | Run manually to fix eligible findings on the demo PR and push the fix back (which re-triggers `02`). Leave the `pr` input blank to target the standing demo PR. |
-| 3 | [`06 - reset the demo`](demo-reset.yml) | Run manually once you want to restore all 32 planted findings and start the walkthrough over. Does **not** recreate the PR — same PR number, re-scanned. |
+| 3 | [`06 - reset the demo`](demo-reset.yml) | Run manually once you want to restore all 32 planted findings and start the walkthrough over. Does **not** recreate the PR — same PR number, re-scanned. `scope: everything` (the default) also closes every `sonar/*` PR, deletes every `sonar/*` branch and empties `plan.json`, so the finding-driven path restarts from a known state too; `scope: demo` is the branch-only original. |
 
 Repeat 2 ⇄ `02` until the gate is green, or the attempt cap is hit.
 
@@ -45,7 +45,7 @@ PR belongs to a group opted into `auto_continue`, dispatches `05` for you.
 | Workflow | Role |
 |---|---|
 | [`02 - scan, gate & settle`](sonar-pr-scan.yml) | Scans a PR, decides the Sonar quality gate (the required check on `main` is this job, named `gate`), comments the result on the PR, and records ready/red. **Always fires automatically** on `pull_request` open/sync/reopen — you don't normally trigger this yourself. Manual dispatch (with a `pr` number) exists only to force a re-run without pushing a new commit. |
-| [`05 - remediate a PR`](remediate.yml) | The actual fix step: given a PR number, fixes eligible findings, writes a test per fix, builds, tests, and pushes back — which re-triggers `02`. Used by both paths. |
+| [`05 - remediate a PR`](remediate.yml) | The actual fix step: given a PR number, fixes eligible findings, writes a test per fix, builds, tests, **builds the app's Docker image and proves it boots and serves**, and pushes back — which re-triggers `02`. Used by both paths. |
 
 ## Reusable modules — never run these directly
 
@@ -58,8 +58,8 @@ to supply it for you — there's no reason to.
 | Workflow | Called by |
 |---|---|
 | [`_file-ticket.yml`](_file-ticket.yml) | `03`, `04` — files or finds a Jira ticket per finding group in scope. |
-| [`_branch-pr.yml`](_branch-pr.yml) | `03`, `04` — creates or finds the branch + PR for one group. |
-| [`_settle-notify.yml`](_settle-notify.yml) | `02`'s `settle` job — reads the gate verdict, decides ready/red, optionally auto-merges, posts the verdict on the PR, and records the outcome on any ticket the PR already had. |
+| [`_branch-pr.yml`](_branch-pr.yml) | `03`, `04` — creates or finds the branch + PR for one group. Names both from the group's Jira key and fingerprint (`sonar/SONAR-42-gf-…`, `[SONAR-42] [api] …`), via `jira/naming.mjs` in the automation repo, so they cannot name different tickets. Reuses a pre-existing `sonar/<fingerprint>` branch rather than duplicating it. |
+| [`_settle-notify.yml`](_settle-notify.yml) | `02`'s `settle` job — reads the gate verdict, decides ready/red, optionally auto-merges, posts the verdict on the PR, records the outcome on any ticket the PR already had, and writes the remediated /**not** remediated outcome onto each Sonar finding (comment + tag). |
 
 ## Utility — unrelated to either path
 
