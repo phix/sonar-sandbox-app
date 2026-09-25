@@ -8,3 +8,10 @@ coverage/
 *.log
 .DS_Store
 .scannerwork/
+
+# The automation repo, checked out here by 05 - remediate a PR. It is a nested
+# git repository, so an unignored `git add -A` records it as a gitlink rather
+# than as files — see the SCRATCH comment in .github/workflows/remediate.yml,
+# which is what actually protects the demo branch (it is cut from v0-pristine
+# and will never carry a fix made here).
+.automation/

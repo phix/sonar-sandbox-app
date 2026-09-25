@@ -503,9 +503,21 @@ jobs:
           # anyway — the untracked scratch was ALWAYS enough to make
           # `git status --porcelain` non-empty, so this guard could not
           # actually fire until it excluded them by name.
+          # `.automation` is the automation-repo checkout this job makes into
+          # the worktree, and it is scratch like the rest — but it is a NESTED
+          # GIT REPOSITORY, so `git add -A` does not add its files, it adds a
+          # gitlink ("Subproject commit <sha>") and silently turns the sandbox
+          # into a repo with an embedded repo in it. Proven 2026-09-25: the
+          # first real remediation run (e1d2eb4) committed exactly that, the
+          # first time in the branch's history, putting a meaningless
+          # `160000 commit` entry in the very diff the demo exists to show.
+          # Excluding it by pathspec is right for the demo branch specifically,
+          # because that branch is cut from v0-pristine and will never carry a
+          # .gitignore fix made on main.
           SCRATCH=(findings.json ratio.json dispositions.json agentic.json
                     remediation-comment.md agentic-comment.md
-                    container-gate.json container-gate-comment.md)
+                    container-gate.json container-gate-comment.md
+                    .automation)
           EXCLUDE=()
           for f in "${SCRATCH[@]}"; do EXCLUDE+=(":(exclude)$f"); done
 
